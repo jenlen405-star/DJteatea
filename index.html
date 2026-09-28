@@ -1,0 +1,2287 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="DJ Mixer">
+<meta name="theme-color" content="#24262c">
+<meta name="format-detection" content="telephone=no">
+<title>DJ Mixer</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<style>
+:root {
+  --chassis: #24262c; --panel: #2d3038; --panel-hi: #353944; --well: #1a1b20; --edge: #454a56;
+  --ink: #ece8df; --dim: #9a9ca6; --faint: #6b6e79;
+  --amber: #ffb547; --cyan: #4cc9f0; --danger: #ff6a5c; --good: #7ddc98;
+  --num: "Avenir Next Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --ui: -apple-system, "SF Pro Text", "PingFang TC", "Noto Sans TC", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body {
+  height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none;
+  background: var(--chassis); color: var(--ink); font: 13px/1.35 var(--ui);
+  -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  -webkit-text-size-adjust: 100%;
+}
+button { font: inherit; color: inherit; border: 0; background: none; padding: 0; cursor: pointer; touch-action: manipulation; }
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--acc, var(--amber)); outline-offset: 2px; }
+input, select { font: inherit; }
+
+#app { position: fixed; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+
+/* ---------- 頂欄 ---------- */
+.topbar { display: flex; align-items: center; gap: 10px; padding: 6px 10px 2px; min-height: 40px; }
+.brand { font: 700 18px/1 var(--num); letter-spacing: .01em; font-style: italic; margin-right: 0; white-space: nowrap; flex: 0 0 auto; }
+.tabs { display: flex; background: var(--well); border-radius: 9px; padding: 2px; flex: 0 0 auto; }
+.tabs button { white-space: nowrap; padding: 5px 10px; border-radius: 7px; color: var(--dim); font-weight: 600; }
+.tabs button.on { background: var(--panel-hi); color: var(--ink); box-shadow: 0 1px 0 rgba(255,255,255,.06) inset; }
+.chip { margin-left: auto; flex: 1 1 0; min-width: 0; text-align: right; font-size: 12px; color: var(--dim); background: var(--well); padding: 5px 10px; border-radius: 99px; max-width: 46%;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip.live { color: var(--good); }
+.chip.bad { color: var(--danger); }
+
+.tab { display: none; flex: 1; min-height: 0; }
+.tab.on { display: flex; }
+
+/* ---------- 混音台 ---------- */
+.mixer { flex: 1; min-height: 0; min-width: 0; display: grid; gap: 6px; padding: 4px 8px 8px;
+  grid-template-columns: 1fr 1fr; grid-template-rows: minmax(0, 1fr) auto; grid-template-areas: "a b" "x x"; }
+@media (orientation: portrait) {
+  .mixer { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr); grid-template-areas: "a" "x" "b"; }
+}
+#deckA { grid-area: a; } #deckB { grid-area: b; }
+
+.deck { --acc: var(--amber); background: var(--panel); border-radius: 14px; padding: 8px; display: grid; gap: 6px; min-height: 0; min-width: 0;
+  box-shadow: inset 0 0 0 1px var(--edge), inset 0 3px 0 var(--acc);
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "info info info info" "wave wave wave wave" "tempo plat vol ctl" "loop loop loop loop" "fx fx fx fx"; }
+.deck.b { --acc: var(--cyan); }
+
+.info { grid-area: info; display: flex; align-items: center; gap: 8px; min-width: 0; padding-top: 3px; }
+.trk { flex: 1; min-width: 0; }
+.trk .t { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.trk .s { color: var(--dim); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.key { font: 700 13px var(--num); min-width: 34px; text-align: center; padding: 2px 6px; border-radius: 6px; background: var(--well); color: var(--dim); }
+.bpm { text-align: right; line-height: 1; }
+.bpm b { display: block; font: 600 26px var(--num); font-variant-numeric: tabular-nums; color: var(--acc); }
+.bpm i { font: normal 600 11px var(--num); color: var(--dim); font-variant-numeric: tabular-nums; }
+
+.wave { grid-area: wave; position: relative; height: 34px; background: var(--well); border-radius: 7px; overflow: hidden; touch-action: none; }
+.wave canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+.wave .tm { position: absolute; right: 5px; top: 1px; font: 600 11px var(--num); color: var(--ink); font-variant-numeric: tabular-nums; text-shadow: 0 0 3px #000; pointer-events: none; }
+.wave .tm.l { left: 5px; right: auto; color: var(--dim); }
+
+/* 轉盤 */
+.platcell { grid-area: plat; position: relative; min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
+.platter { width: var(--p, 120px); height: var(--p, 120px); border-radius: 50%; position: relative; touch-action: none; cursor: grab;
+  background: #0c0c0e; box-shadow: 0 0 0 3px var(--well), 0 0 0 4px var(--edge), 0 6px 14px rgba(0,0,0,.45); }
+.platter:active { cursor: grabbing; }
+.disc { position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 50%; will-change: transform;
+  background:
+    conic-gradient(from 20deg, rgba(255,255,255,0) 0deg, rgba(255,255,255,.11) 14deg, rgba(255,255,255,0) 34deg, rgba(255,255,255,0) 180deg, rgba(255,255,255,.08) 194deg, rgba(255,255,255,0) 214deg),
+    repeating-radial-gradient(circle at 50% 50%, #0d0d0f 0 1.5px, #19191d 1.5px 3px); }
+.disc .lab { position: absolute; top: 33%; left: 33%; right: 33%; bottom: 33%; border-radius: 50%; background: var(--acc); }
+.disc .lab::before { content: ""; position: absolute; top: 6%; left: 50%; width: 3px; height: 26%; margin-left: -1.5px; background: rgba(0,0,0,.55); border-radius: 2px; }
+.disc .lab::after { content: ""; position: absolute; top: 50%; left: 50%; width: 9%; height: 9%; margin: -4.5% 0 0 -4.5%; background: #0c0c0e; border-radius: 50%; }
+.platter.touch { box-shadow: 0 0 0 3px var(--acc), 0 0 16px var(--acc); }
+.leds { position: absolute; left: 0; right: 0; bottom: -3px; display: flex; justify-content: center; gap: 6px; pointer-events: none; }
+.leds i { width: 7px; height: 7px; border-radius: 50%; background: #111; box-shadow: 0 0 0 1px var(--edge); }
+.leds i.on { background: var(--acc); box-shadow: 0 0 6px var(--acc); }
+.leds i.on.dn { background: #fff; }
+.nofile { position: absolute; color: var(--faint); font-size: 12px; pointer-events: none; text-align: center; }
+
+/* 推桿 */
+.fader { position: relative; width: 32px; height: 100%; min-height: 60px; touch-action: none; cursor: ns-resize; }
+.fader .rail { position: absolute; left: 50%; width: 6px; margin-left: -3px; top: 10px; bottom: 10px; background: var(--well); border-radius: 3px; box-shadow: inset 0 0 0 1px #000; }
+.fader .ticks { position: absolute; left: 2px; width: 6px; top: 10px; bottom: 10px;
+  background: repeating-linear-gradient(to bottom, var(--faint) 0 1px, transparent 1px 10%); opacity: .7; }
+.fader .mid { position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: var(--acc); opacity: .55; }
+.fader .cap { position: absolute; left: 1px; right: 1px; height: 24px; margin-top: -12px; border-radius: 5px;
+  background: linear-gradient(#e4e6ec, #a2a8b5 55%, #8b91a0); box-shadow: 0 2px 4px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.4); }
+.fader .cap::after { content: ""; position: absolute; left: 4px; right: 4px; top: 50%; height: 2px; margin-top: -1px; background: var(--acc); border-radius: 1px; }
+.fader .meter { position: absolute; right: 0; width: 4px; top: 10px; bottom: 10px; background: var(--well); border-radius: 2px; overflow: hidden; }
+.fader .meter i { position: absolute; left: 0; right: 0; bottom: 0; height: 0%; background: linear-gradient(to top, var(--good) 0 60%, var(--amber) 60% 85%, var(--danger) 85%); }
+.fader .lbl { position: absolute; left: 0; right: 0; top: -1px; text-align: center; font: 600 10px var(--num); color: var(--dim); pointer-events: none; }
+.fader.tempo { grid-area: tempo; } .fader.vol { grid-area: vol; }
+
+/* 按鈕 */
+.ctl { grid-area: ctl; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 1fr; gap: 5px; width: 104px; }
+.btn { background: var(--panel-hi); border-radius: 9px; font-weight: 700; color: var(--ink); box-shadow: 0 1px 0 rgba(255,255,255,.07) inset, 0 0 0 1px rgba(0,0,0,.35);
+  display: flex; align-items: center; justify-content: center; min-height: 34px; }
+.btn:active { transform: translateY(1px); filter: brightness(1.15); }
+.btn.on { background: var(--acc); color: #17181c; }
+.btn.play { font-size: 18px; }
+.btn.dis { opacity: .4; }
+.pads { display: flex; gap: 4px; min-width: 0; }
+.pads .btn { flex: 1; min-width: 0; min-height: 28px; font-size: 12px; padding: 0 2px; font-weight: 600; border-radius: 7px; }
+.pads .btn.lp { flex: 0 0 auto; padding: 0 9px; }
+.pads .sz { flex: 0 0 auto; width: 30px; background: var(--well); color: var(--dim); }
+.pads .sz.on { background: var(--panel-hi); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--acc); }
+.row-loop { grid-area: loop; } .row-fx { grid-area: fx; }
+.bankbtn { display: none; flex: 0 0 auto; width: 38px; background: var(--well); color: var(--dim); }
+
+/* 橫向:空間不足,Loop 與 FX 共用一列,用按鈕切換 */
+@media (orientation: landscape) {
+  .deck { grid-template-areas: "info info info info" "wave wave wave wave" "tempo plat vol ctl" "pads pads pads pads"; grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .row-loop, .row-fx { grid-area: pads; }
+  .deck.bank-loop .row-fx, .deck.bank-fx .row-loop { display: none; }
+  .bankbtn { display: flex; }
+  .wave { height: 28px; }
+  .bpm b { font-size: 22px; }
+}
+
+/* Crossfader */
+.xwrap { grid-area: x; display: flex; align-items: center; gap: 10px; background: var(--panel); border-radius: 14px; padding: 6px 14px;
+  box-shadow: inset 0 0 0 1px var(--edge); }
+.xwrap .ab { font: 700 18px var(--num); width: 16px; text-align: center; }
+.xwrap .ab.a { color: var(--amber); } .xwrap .ab.b { color: var(--cyan); }
+.xf { position: relative; flex: 1; height: 44px; touch-action: none; cursor: ew-resize; }
+.xf .rail { position: absolute; top: 50%; left: 24px; right: 24px; height: 6px; margin-top: -3px; background: var(--well); border-radius: 3px; box-shadow: inset 0 0 0 1px #000; }
+.xf .ticks { position: absolute; left: 24px; right: 24px; top: 7px; height: 6px; background: repeating-linear-gradient(to right, var(--faint) 0 1px, transparent 1px 12.5%); opacity: .7; }
+.xf .cap { position: absolute; top: 50%; width: 46px; height: 32px; margin: -16px 0 0 -23px; border-radius: 6px;
+  background: linear-gradient(#e4e6ec, #a2a8b5 55%, #8b91a0); box-shadow: 0 2px 5px rgba(0,0,0,.5), 0 0 0 1px rgba(0,0,0,.4); }
+.xf .cap::after { content: ""; position: absolute; top: 5px; bottom: 5px; left: 50%; width: 2px; margin-left: -1px; background: #17181c; }
+.xf.auto .cap { box-shadow: 0 0 0 2px var(--good), 0 2px 5px rgba(0,0,0,.5); }
+
+/* ---------- 歌單 / 音源 ---------- */
+.scroll { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 6px 10px 18px; user-select: text; -webkit-user-select: text; }
+.card { background: var(--panel); border-radius: 14px; padding: 12px; margin-bottom: 10px; box-shadow: inset 0 0 0 1px var(--edge); }
+.card h3 { margin: 0 0 8px; font-size: 15px; font-weight: 700; }
+.card p { margin: 6px 0; color: var(--dim); }
+.card .hint { font-size: 12px; color: var(--faint); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 2px; }
+.abtn { background: var(--panel-hi); border-radius: 9px; padding: 9px 13px; font-weight: 600; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 0 rgba(255,255,255,.07) inset; }
+.abtn.primary { background: var(--amber); color: #17181c; }
+.abtn.go { background: var(--good); color: #17181c; }
+.abtn.stop { background: var(--danger); color: #17181c; }
+.abtn:disabled { opacity: .45; }
+.opts { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 8px; color: var(--dim); }
+.opts label { display: inline-flex; align-items: center; gap: 6px; }
+select, input[type=text], input[type=url], input[type=password] { background: var(--well); color: var(--ink); border: 1px solid var(--edge); border-radius: 8px; padding: 8px 10px; user-select: text; -webkit-user-select: text; }
+input.wide { width: 100%; margin: 4px 0; }
+
+.list { display: flex; flex-direction: column; gap: 6px; }
+.row { display: flex; align-items: center; gap: 8px; background: var(--well); border-radius: 10px; padding: 8px 8px 8px 10px; }
+.row .kb { flex: 0 0 auto; width: 40px; text-align: center; font: 700 13px var(--num); padding: 3px 0; border-radius: 6px; color: #17181c; background: var(--faint); }
+.row .meta { flex: 1; min-width: 0; }
+.row .meta b { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .meta span { color: var(--dim); font-size: 12px; font-variant-numeric: tabular-nums; }
+.row .go { display: flex; gap: 4px; }
+.row .go button { min-width: 34px; height: 34px; border-radius: 8px; background: var(--panel-hi); font-weight: 700; }
+.row .go button.a { color: var(--amber); } .row .go button.b { color: var(--cyan); }
+.row .go button.on { background: var(--good); color: #17181c; }
+.row .num { flex: 0 0 auto; width: 22px; text-align: center; color: var(--faint); font: 600 14px var(--num); }
+.compat { text-align: center; font-size: 11px; color: var(--faint); margin: -2px 0; }
+.compat.good { color: var(--good); } .compat.mid { color: var(--amber); } .compat.bad { color: var(--danger); }
+.empty { color: var(--dim); padding: 14px 4px; text-align: center; }
+.now { display: flex; gap: 10px; align-items: center; margin: 8px 0; padding: 8px 10px; background: var(--well); border-radius: 10px; }
+.now .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--good); box-shadow: 0 0 8px var(--good); flex: 0 0 auto; }
+.bar { height: 5px; background: var(--well); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.bar i { display: block; height: 100%; background: var(--acc, var(--good)); width: 0; }
+
+/* ---------- 覆蓋層 / Toast ---------- */
+#start { position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 50; background: var(--chassis); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; text-align: center; padding: 24px; gap: 16px; }
+#start.hide { display: none; }
+#start .spin { width: 128px; height: 128px; border-radius: 50%; position: relative;
+  background: conic-gradient(from 20deg, rgba(255,255,255,0), rgba(255,255,255,.12) 14deg, rgba(255,255,255,0) 34deg, rgba(255,255,255,0) 180deg, rgba(255,255,255,.08) 194deg, rgba(255,255,255,0) 214deg),
+              repeating-radial-gradient(circle, #0d0d0f 0 1.5px, #19191d 1.5px 3px);
+  box-shadow: 0 0 0 4px var(--well), 0 8px 22px rgba(0,0,0,.5); animation: spin 5.4s linear infinite; }
+#start .spin::after { content: ""; position: absolute; top: 33%; left: 33%; right: 33%; bottom: 33%; border-radius: 50%;
+  background: conic-gradient(var(--amber) 0 50%, var(--cyan) 50% 100%); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #start .spin { animation: none; } }
+#start h1 { margin: 0; font: italic 700 36px var(--num); }
+#start p { margin: 0; color: var(--dim); max-width: 30em; }
+#start .err { color: var(--danger); }
+#start .abtn { font-size: 17px; padding: 13px 34px; }
+
+#toast { position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); transform: translate(-50%, 20px); opacity: 0; z-index: 60;
+  background: #0d0e11; color: var(--ink); padding: 9px 15px; border-radius: 99px; box-shadow: 0 0 0 1px var(--edge), 0 6px 18px rgba(0,0,0,.5);
+  max-width: 88vw; text-align: center; pointer-events: none; transition: opacity .18s, transform .18s; }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <div class="brand">DJ Mixer</div>
+    <nav class="tabs"><button class="on" data-tab="mixer">混音台</button><button data-tab="library">歌單</button><button data-tab="sources">音源</button></nav>
+    <div class="chip" id="chip">Automix 關閉</div>
+  </header>
+  <main style="display:flex;flex:1;min-height:0;min-width:0">
+    <section class="tab on" id="tab-mixer">
+      <div class="mixer">
+        <div class="deck a" id="deckA"></div>
+        <div class="xwrap"><span class="ab a">A</span>
+          <div class="xf" id="xf"><div class="rail"></div><div class="ticks"></div><div class="cap"></div></div>
+          <span class="ab b">B</span></div>
+        <div class="deck b" id="deckB"></div>
+      </div>
+    </section>
+    <section class="tab" id="tab-library"></section>
+    <section class="tab" id="tab-sources"></section>
+  </main>
+</div>
+
+<div id="start">
+  <div class="spin"></div>
+  <h1>DJ Mixer</h1>
+  <p>兩個轉盤、變速不變調、刷碟、Loop、效果器,還有會自己對拍換歌的 Automix。</p>
+  <button class="abtn primary" id="startBtn">開始混音</button>
+  <p class="err" id="startMsg"></p>
+  <p style="font-size:12px;color:var(--faint)">先把音量調好或戴上耳機。橫向握持轉盤會更大。</p>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fileInput" accept="audio/*,.mp3,.m4a,.aac,.wav,.flac,.ogg,.aif,.aiff" multiple hidden>
+
+<script type="text/plain" id="worklet-src">
+/* ============================================================================
+ * DeckCore — 單一轉盤的音訊 DSP 核心(純 JS,不依賴任何瀏覽器 API)
+ *
+ * 兩種播放模式:
+ *  1. stretch(變速不變調):WSOLA 時間伸縮。輸入以 tempo 倍速前進,
+ *     但每個 grain 都以原音高讀取,並用互相關搜尋最佳銜接點,所以音高不變。
+ *  2. resample(黑膠/刷碟):直接以任意速率(含負值=倒轉)對取樣點做內插。
+ *     刷碟、放開後的慣性回彈、Key Lock 關閉時都走這條路。
+ *
+ * 模式切換(刷碟 ↔ 正常播放)由 render() 依狀態自動處理:
+ *  - 手指按著轉盤(scratchActive) → resample,速率追隨手指
+ *  - 放開後 curRate 以 tau 時間常數平滑回到 tempo,收斂後自動切回 stretch
+ * ========================================================================== */
+class DeckCore {
+  constructor(sr) {
+    this.sr = sr;
+    this.L = null; this.R = null; this.N = 0;
+
+    // 播放狀態
+    this.pos = 0;              // resample 模式的播放頭(來源取樣點,浮點)
+    this.playing = false;
+    this.tempo = 1;            // 目標速度倍率(1 = 原速)
+    this.keylock = true;       // true: 變速不變調;false: 黑膠模式(音高跟著變)
+    this.scratchActive = false;
+    this.scratchRate = 0;
+    this.curRate = 0;          // 平滑後的實際速率(來源取樣點 / 輸出取樣點)
+    this.tau = 0.02;           // 速率平滑時間常數(秒)
+    this.mode = 'resample';
+    this.loop = { on: false, a: 0, b: 0 };
+    this.fade = 1;             // 0..1 的淡入增益(切換模式/seek 時避免爆音)
+    this.fadeStep = 1 / 96;
+    this.ended = false;
+
+    // WSOLA 參數
+    this.W = 2048;             // grain 長度
+    this.H = 1024;             // 輸出 hop(50% 重疊)
+    this.tol = 512;            // 搜尋最佳銜接點的範圍(±取樣點)
+    this.win = new Float32Array(this.W);
+    for (let i = 0; i < this.W; i++) {
+      this.win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / this.W); // periodic Hann,50% 重疊總和為 1
+    }
+    const segLen = this.W + 2 * this.tol;
+    this.segL = new Float32Array(segLen);
+    this.segR = new Float32Array(segLen);
+    this.segM = new Float32Array(segLen);
+    this.accL = new Float32Array(this.W);
+    this.accR = new Float32Array(this.W);
+    this.qL = new Float32Array(this.H);
+    this.qR = new Float32Array(this.H);
+    this.refM = new Float32Array(this.H);
+    this.hasRef = false;
+    this.qRead = this.H;       // = H 代表佇列已空,下次 render 會先產生一個 hop
+    this.anaPos = 0;           // 下一個 grain 的名義分析位置
+    this.hopSrcStart = 0;      // 目前 hop 對應的來源位置(用來回報播放頭)
+  }
+
+  /* ---------- 外部控制 ---------- */
+  load(L, R) {
+    this.L = L; this.R = R || L; this.N = L.length;
+    this.pos = 0; this.curRate = 0; this.playing = false; this.ended = false;
+    this.mode = 'resample'; this.loop.on = false; this.scratchActive = false;
+    this.hasRef = false; this.qRead = this.H;
+  }
+  unload() { this.L = this.R = null; this.N = 0; this.playing = false; }
+
+  play(immediate) {
+    if (!this.L) return;
+    if (this.ended || this.pos >= this.N - 2) { this.pos = 0; this.ended = false; }
+    this.playing = true;
+    this.tau = 0.02;
+    if (immediate) { this.curRate = this.tempo; this._ramp(); }
+  }
+  pause() { this.playing = false; this.tau = 0.015; }
+
+  seek(p) {
+    const q = Math.max(0, Math.min(this.N - 1, p));
+    if (this.mode === 'stretch') {
+      this.anaPos = q; this._resetStretch();
+    } else {
+      this.pos = q;
+    }
+    this.ended = false;
+    this._ramp();
+  }
+  nudge(delta) { this.seek(this.getPos() + delta); }
+
+  setTempo(t) { this.tempo = Math.max(0.25, Math.min(4, t)); }
+  setKeylock(b) { this.keylock = !!b; }
+
+  scratchStart() {
+    this.scratchActive = true; this.scratchRate = 0; this.tau = 0.006;
+  }
+  setScratchRate(r) { this.scratchRate = Math.max(-8, Math.min(8, r)); }
+  scratchEnd() {
+    this.scratchActive = false; this.tau = 0.12;   // 放開後以 ~120ms 時間常數平滑回彈到原速
+  }
+
+  /* 設定 Loop,並把進出點吸附到最近的零交越點,避免循環銜接處產生喀聲 */
+  setLoop(a, b) {
+    if (!this.L) return;
+    let A = this.snapZero(Math.max(0, Math.round(a)));
+    let B = this.snapZero(Math.min(this.N - 1, Math.round(b)));
+    if (B - A < 64) return;
+    this.loop.a = A; this.loop.b = B; this.loop.on = true;
+    const p = this.getPos();
+    if (p >= B) this.seek(A + ((p - A) % (B - A)));
+  }
+  clearLoop() { this.loop.on = false; }
+
+  snapZero(idx, range) {
+    const L = this.L; if (!L) return idx;
+    range = range || Math.round(this.sr * 0.004);
+    let best = idx, bestD = 1e9;
+    const lo = Math.max(1, idx - range), hi = Math.min(this.N - 1, idx + range);
+    for (let i = lo; i <= hi; i++) {
+      const p = L[i - 1], c = L[i];
+      if ((p <= 0 && c > 0) || (p >= 0 && c < 0)) {
+        const d = Math.abs(i - idx);
+        if (d < bestD) { bestD = d; best = i; }
+      }
+    }
+    return best;
+  }
+
+  /* 目前播放頭(來源取樣點) */
+  getPos() {
+    if (this.mode === 'stretch') return this.hopSrcStart + (this.qRead < this.H ? this.qRead : this.H) * this.tempo;
+    return this.pos;
+  }
+
+  /* ---------- 內部 ---------- */
+  _ramp() { this.fade = 0; }
+
+  _resetStretch() {
+    // 用「虛擬的前一個 grain 的後半段」預填累加器,讓第一個 hop 不會有淡入的凹陷
+    const H = this.H, W = this.W;
+    const c = Math.round(this.anaPos);
+    this.accL.fill(0); this.accR.fill(0);
+    for (let i = 0; i < H; i++) {
+      const idx = this._wrap(c + i);
+      const w = this.win[H + i];
+      if (idx >= 0 && idx < this.N) {
+        this.accL[i] = w * this.L[idx];
+        this.accR[i] = w * this.R[idx];
+        this.refM[i] = 0.5 * (this.L[idx] + this.R[idx]);
+      } else { this.refM[i] = 0; }
+    }
+    this.hasRef = true;
+    this.qRead = H;
+    this.hopSrcStart = this.anaPos - H * this.tempo;   // qRead=H 時 getPos() 剛好等於 anaPos
+  }
+
+  _wrap(idx) {
+    const lp = this.loop;
+    if (lp.on && idx >= lp.b) return lp.a + ((idx - lp.a) % (lp.b - lp.a));
+    return idx;
+  }
+
+  _toStretch() {
+    this.mode = 'stretch';
+    this.anaPos = this.pos;
+    this._resetStretch();
+    this._ramp();
+  }
+  _toResample() {
+    this.pos = this.getPos();
+    this.curRate = this.tempo;
+    this.mode = 'resample';
+    this._ramp();
+  }
+
+  _hop() {
+    const W = this.W, H = this.H, tol = this.tol, N = this.N;
+    const segLen = W + 2 * tol;
+    const c = Math.round(this.anaPos);
+    const start = c - tol;
+    const L = this.L, R = this.R, lp = this.loop;
+    const segL = this.segL, segR = this.segR, segM = this.segM;
+
+    for (let k = 0; k < segLen; k++) {
+      let idx = start + k;
+      if (lp.on && idx >= lp.b) idx = lp.a + ((idx - lp.a) % (lp.b - lp.a));
+      if (idx < 0 || idx >= N) { segL[k] = 0; segR[k] = 0; segM[k] = 0; }
+      else { const l = L[idx], r = R[idx]; segL[k] = l; segR[k] = r; segM[k] = 0.5 * (l + r); }
+    }
+
+    // 在 ±tol 內搜尋與「上一個 grain 自然接續內容」相關性最高的起點
+    let best = tol;
+    if (this.hasRef) {
+      const ref = this.refM;
+      let bestScore = -1e30;
+      const score = (j, stride) => {
+        let dot = 0, en = 1e-9;
+        for (let t = 0; t < H; t += stride) { const v = segM[j + t]; dot += v * ref[t]; en += v * v; }
+        // 對偏離名義位置的候選加一點懲罰,讓節拍定位誤差維持在最小
+        const bias = 1 - 0.06 * Math.abs(j - tol) / tol;
+        return (dot / Math.sqrt(en)) * (dot > 0 ? bias : 1 / bias);
+      };
+      for (let j = 0; j <= 2 * tol; j += 2) {
+        const s = score(j, 4);
+        if (s > bestScore) { bestScore = s; best = j; }
+      }
+      const lo = Math.max(0, best - 2), hi = Math.min(2 * tol, best + 2);
+      let b2 = best, s2 = -1e30;
+      for (let j = lo; j <= hi; j++) { const s = score(j, 2); if (s > s2) { s2 = s; b2 = j; } }
+      best = b2;
+    }
+
+    // 加窗後疊加到累加器
+    const accL = this.accL, accR = this.accR, win = this.win;
+    for (let i = 0; i < W; i++) {
+      const w = win[i];
+      accL[i] += w * segL[best + i];
+      accR[i] += w * segR[best + i];
+    }
+    // 輸出前 H 個取樣,累加器左移
+    this.qL.set(accL.subarray(0, H)); this.qR.set(accR.subarray(0, H));
+    accL.copyWithin(0, H); accR.copyWithin(0, H); accL.fill(0, W - H); accR.fill(0, W - H);
+    for (let i = 0; i < H; i++) this.refM[i] = segM[best + H + i];
+    this.hasRef = true;
+
+    this.hopSrcStart = this.anaPos;
+    this.anaPos += H * this.tempo;
+    if (lp.on && this.anaPos >= lp.b) this.anaPos = lp.a + ((this.anaPos - lp.a) % (lp.b - lp.a));
+    if (!lp.on && this.anaPos >= N) { this.playing = false; this.ended = true; }
+  }
+
+  /* ---------- 渲染 ---------- */
+  render(outL, outR, n) {
+    if (!this.L) { outL.fill(0, 0, n); outR.fill(0, 0, n); return; }
+    let i = 0;
+    while (i < n) {
+      if (this.mode === 'stretch') {
+        if (!(this.keylock && this.playing && !this.scratchActive)) this._toResample();
+      } else if (this.keylock && this.playing && !this.scratchActive &&
+                 Math.abs(this.curRate - this.tempo) < 0.004) {
+        this._toStretch();
+      }
+      i = (this.mode === 'stretch') ? this._renderStretch(outL, outR, i, n)
+                                    : this._renderResample(outL, outR, i, n);
+    }
+  }
+
+  _renderStretch(outL, outR, i, n) {
+    const H = this.H;
+    while (i < n) {
+      if (this.qRead >= H) {
+        if (this.ended) { for (; i < n; i++) { outL[i] = 0; outR[i] = 0; } return n; }
+        this._hop(); this.qRead = 0;
+      }
+      const take = Math.min(n - i, H - this.qRead);
+      const qL = this.qL, qR = this.qR;
+      let f = this.fade;
+      for (let k = 0; k < take; k++) {
+        if (f < 1) { f += this.fadeStep; if (f > 1) f = 1; }
+        outL[i + k] = qL[this.qRead + k] * f;
+        outR[i + k] = qR[this.qRead + k] * f;
+      }
+      this.fade = f;
+      this.qRead += take; i += take;
+    }
+    return i;
+  }
+
+  _renderResample(outL, outR, i, n) {
+    const L = this.L, R = this.R, N = this.N, lp = this.loop;
+    const target = this.scratchActive ? this.scratchRate : (this.playing ? this.tempo : 0);
+    const a = 1 - Math.exp(-1 / (this.tau * this.sr));
+    const wantConv = this.keylock && this.playing && !this.scratchActive;
+    let pos = this.pos, rate = this.curRate, f = this.fade;
+    for (; i < n; i++) {
+      rate += (target - rate) * a;
+      if (wantConv && Math.abs(rate - this.tempo) < 0.004) { this.pos = pos; this.curRate = rate; this.fade = f; return i; }
+      pos += rate;
+      if (lp.on) {
+        if (rate > 0 && pos >= lp.b) pos = lp.a + ((pos - lp.a) % (lp.b - lp.a));
+        else if (rate < 0 && pos < lp.a) pos += (lp.b - lp.a);
+      }
+      if (pos < 0) { pos = 0; if (rate < 0) rate = 0; }
+      if (pos >= N - 2) {
+        pos = N - 2; outL[i] = 0; outR[i] = 0;
+        if (rate > 0) { this.playing = false; this.ended = true; rate = 0; }
+        continue;
+      }
+      const ip = pos | 0, fr = pos - ip;
+      let g = Math.abs(rate) * 20; if (g > 1) g = 1;   // 接近停止時淡出,避免停在直流位準
+      if (f < 1) { f += this.fadeStep; if (f > 1) f = 1; }
+      g *= f;
+      outL[i] = (L[ip] + (L[ip + 1] - L[ip]) * fr) * g;
+      outR[i] = (R[ip] + (R[ip + 1] - R[ip]) * fr) * g;
+    }
+    this.pos = pos; this.curRate = rate; this.fade = f;
+    return i;
+  }
+}
+
+if (typeof globalThis !== 'undefined') globalThis.__DeckCore = DeckCore;
+
+/* ============================================================================
+ * AudioWorklet 內容(建置時會接在 dsp-core.js 後面,整份以 Blob URL 載入)
+ * ========================================================================== */
+
+class DeckProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.core = new DeckCore(sampleRate);
+    this.pendingStart = null;   // 排程起播的 context frame(供 Automix 精準對拍)
+    this.since = 0;
+    this.wasEnded = false;
+    this.port.onmessage = (e) => this.onMsg(e.data);
+  }
+
+  onMsg(m) {
+    const c = this.core;
+    switch (m.t) {
+      case 'load':      c.load(m.L, m.R || m.L); this.pendingStart = null; this.report(); break;
+      case 'unload':    c.unload(); this.report(); break;
+      case 'play':      c.play(true); break;
+      case 'playAt':    this.pendingStart = m.frame; break;
+      case 'pause':     c.pause(); this.pendingStart = null; break;
+      case 'seek':      c.seek(m.pos); this.report(); break;
+      case 'nudge':     c.nudge(m.delta); break;
+      case 'tempo':     c.setTempo(m.v); break;
+      case 'keylock':   c.setKeylock(m.on); break;
+      case 'scratchStart': c.scratchStart(); break;
+      case 'scratchRate':  c.setScratchRate(m.v); break;
+      case 'scratchEnd':   c.scratchEnd(); break;
+      case 'loop':      c.setLoop(m.a, m.b); this.report(); break;
+      case 'loopOff':   c.clearLoop(); this.report(); break;
+    }
+  }
+
+  report() {
+    const c = this.core;
+    this.port.postMessage({
+      t: 'pos', pos: c.getPos(), frame: currentFrame,
+      rate: c.mode === 'stretch' ? c.tempo : c.curRate,
+      playing: c.playing, scratch: c.scratchActive,
+      loop: { on: c.loop.on, a: c.loop.a, b: c.loop.b }
+    });
+  }
+
+  process(inputs, outputs) {
+    const out = outputs[0], oL = out[0], oR = out[1] || out[0], n = oL.length, c = this.core;
+    if (this.pendingStart !== null) {
+      const off = this.pendingStart - currentFrame;
+      if (off >= n) { oL.fill(0); oR.fill(0); }
+      else {
+        this.pendingStart = null;
+        c.play(true);
+        if (off > 0) { oL.fill(0, 0, off); oR.fill(0, 0, off); c.render(oL.subarray(off), oR.subarray(off), n - off); }
+        else c.render(oL, oR, n);
+      }
+    } else {
+      c.render(oL, oR, n);
+    }
+    this.since += n;
+    if (this.since >= 1024) { this.since = 0; this.report(); }
+    if (c.ended && !this.wasEnded) { this.wasEnded = true; this.port.postMessage({ t: 'ended' }); }
+    else if (!c.ended) this.wasEnded = false;
+    return true;
+  }
+}
+registerProcessor('deck-processor', DeckProcessor);
+
+/* Bitcrush:降低位元深度 + 降低取樣率(sample & hold),mix 平滑切換 */
+class BitcrushProcessor extends AudioWorkletProcessor {
+  static get parameterDescriptors() {
+    return [
+      { name: 'bits', defaultValue: 6, minValue: 1, maxValue: 16, automationRate: 'k-rate' },
+      { name: 'down', defaultValue: 6, minValue: 1, maxValue: 64, automationRate: 'k-rate' },
+      { name: 'mix',  defaultValue: 0, minValue: 0, maxValue: 1,  automationRate: 'k-rate' },
+    ];
+  }
+  constructor() { super(); this.hold = [0, 0]; this.cnt = [0, 0]; this.mix = 0; }
+  process(inputs, outputs, params) {
+    const inp = inputs[0], out = outputs[0];
+    const target = params.mix[0];
+    if (target < 0.001 && this.mix < 0.001) {          // 關閉時直接旁路,省 CPU
+      for (let ch = 0; ch < out.length; ch++) { if (inp[ch]) out[ch].set(inp[ch]); else out[ch].fill(0); }
+      this.mix = 0; return true;
+    }
+    const levels = Math.pow(2, Math.round(params.bits[0]) - 1), down = Math.max(1, Math.round(params.down[0]));
+    for (let ch = 0; ch < out.length; ch++) {
+      const x = inp[ch], y = out[ch];
+      if (!x) { y.fill(0); continue; }
+      let hold = this.hold[ch], cnt = this.cnt[ch], mix = this.mix;
+      for (let i = 0; i < y.length; i++) {
+        mix += (target - mix) * 0.002;
+        if (++cnt >= down) { cnt = 0; hold = Math.round(x[i] * levels) / levels; }
+        y[i] = x[i] * (1 - mix) + hold * mix;
+      }
+      this.hold[ch] = hold; this.cnt[ch] = cnt;
+      if (ch === out.length - 1) this.mix = mix;
+    }
+    return true;
+  }
+}
+registerProcessor('bitcrush', BitcrushProcessor);
+
+</script>
+<script>
+/* ============================================================================
+ * 音訊分析(純 JS):BPM / 首拍位置 / 調性(Camelot) / 能量,以及諧波混音排序
+ * ========================================================================== */
+
+/* ---------- FFT(radix-2,原地運算) ---------- */
+const _fftCache = {};
+function fftInPlace(re, im) {
+  const n = re.length;
+  let c = _fftCache[n];
+  if (!c) {
+    const rev = new Uint32Array(n), bits = Math.log2(n) | 0;
+    for (let i = 0; i < n; i++) { let r = 0; for (let b = 0; b < bits; b++) r |= ((i >> b) & 1) << (bits - 1 - b); rev[i] = r; }
+    const cos = new Float64Array(n / 2), sin = new Float64Array(n / 2);
+    for (let i = 0; i < n / 2; i++) { cos[i] = Math.cos(2 * Math.PI * i / n); sin[i] = -Math.sin(2 * Math.PI * i / n); }
+    c = _fftCache[n] = { rev, cos, sin };
+  }
+  const { rev, cos, sin } = c;
+  for (let i = 0; i < n; i++) { const j = rev[i]; if (j > i) { let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+  for (let size = 2; size <= n; size <<= 1) {
+    const half = size >> 1, step = n / size;
+    for (let i = 0; i < n; i += size) {
+      for (let j = 0, k = 0; j < half; j++, k += step) {
+        const a = i + j, b = a + half;
+        const tr = re[b] * cos[k] - im[b] * sin[k], ti = re[b] * sin[k] + im[b] * cos[k];
+        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti;
+      }
+    }
+  }
+}
+
+/* ---------- Camelot Wheel ---------- */
+// index = 主音的半音位置(0=C, 1=C#, ... 11=B)
+const CAMELOT_MAJOR = ['8B', '3B', '10B', '5B', '12B', '7B', '2B', '9B', '4B', '11B', '6B', '1B'];
+const CAMELOT_MINOR = ['5A', '12A', '7A', '2A', '9A', '4A', '11A', '6A', '1A', '8A', '3A', '10A'];
+const KK_MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
+const KK_MINOR = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+const PITCH_NAMES = ['C', 'C♯', 'D', 'E♭', 'E', 'F', 'F♯', 'G', 'A♭', 'A', 'B♭', 'B'];
+
+function camelotToName(code) {
+  let i = CAMELOT_MAJOR.indexOf(code);
+  if (i >= 0) return PITCH_NAMES[i] + ' 大調';
+  i = CAMELOT_MINOR.indexOf(code);
+  return i >= 0 ? PITCH_NAMES[i] + ' 小調' : '';
+}
+
+function _parseCamelot(code) {
+  if (!code) return null;
+  const letter = code.slice(-1), num = parseInt(code.slice(0, -1), 10);
+  return (num >= 1 && num <= 12 && (letter === 'A' || letter === 'B')) ? { num, letter } : null;
+}
+function _ringDist(a, b) { const d = Math.abs(a - b) % 12; return Math.min(d, 12 - d); }
+
+/* 0 = 同調;1 = 相鄰(±1 同字母)或關係大小調(同數字);2 = 對角;3 = 不建議 */
+function compatibilityScore(keyA, keyB) {
+  const a = _parseCamelot(keyA), b = _parseCamelot(keyB);
+  if (!a || !b) return 99;
+  if (a.num === b.num && a.letter === b.letter) return 0;
+  const d = _ringDist(a.num, b.num);
+  if (a.letter === b.letter && d === 1) return 1;
+  if (a.letter !== b.letter && d === 0) return 1;
+  if (a.letter !== b.letter && d === 1) return 2;
+  return 3;
+}
+
+/* 讓 srcBpm 貼近 targetBpm 所需的 tempo 倍率;必要時嘗試倍速/半速(例如 64 ↔ 128) */
+function matchTempoRatio(srcBpm, targetBpm, range) {
+  range = range || 0.16;
+  let best = null;
+  for (const m of [1, 2, 0.5]) {
+    const r = targetBpm / (srcBpm * m);
+    const dev = Math.abs(r - 1);
+    if (best === null || dev < best.dev) best = { ratio: r, dev, mult: m };
+  }
+  const inRange = best.dev <= range;
+  return { ratio: Math.max(1 - range, Math.min(1 + range, best.ratio)), exact: inRange, mult: best.mult };
+}
+
+/* ---------- 前處理 ---------- */
+function _monoSegment(L, R, start, len) {
+  const N = L.length; start = Math.max(0, Math.min(N - 1, start)); len = Math.min(len, N - start);
+  const out = new Float32Array(len);
+  if (R && R !== L) for (let i = 0; i < len; i++) out[i] = 0.5 * (L[start + i] + R[start + i]);
+  else for (let i = 0; i < len; i++) out[i] = L[start + i];
+  return out;
+}
+
+/* ---------- BPM 與首拍位置 ---------- */
+const _HOP = 256;
+
+function _onsetEnvelope(x, sr) {
+  const hop = _HOP, n = Math.floor(x.length / hop);
+  const low = new Float32Array(n), hi = new Float32Array(n);
+  const a = 1 - Math.exp(-2 * Math.PI * 150 / sr);
+  let y1 = 0, y2 = 0, prev = 0;
+  for (let f = 0; f < n; f++) {
+    let el = 0, eh = 0;
+    for (let i = 0; i < hop; i++) {
+      const s = x[f * hop + i];
+      y1 += a * (s - y1); y2 += a * (y1 - y2); el += y2 * y2;
+      const d = s - prev; prev = s; eh += d * d;
+    }
+    low[f] = Math.sqrt(el / hop); hi[f] = Math.sqrt(eh / hop);
+  }
+  const norm = (v) => { let m = 0; for (let i = 0; i < n; i++) m += v[i]; m = m / n + 1e-9; const o = new Float32Array(n); for (let i = 0; i < n; i++) o[i] = Math.log(1 + 8 * v[i] / m); return o; };
+  const cl = norm(low), ch = norm(hi);
+  const env = new Float32Array(n);
+  for (let f = 1; f < n; f++) {
+    const d = Math.max(0, cl[f] - cl[f - 1]) + 0.5 * Math.max(0, ch[f] - ch[f - 1]);
+    env[f] = d;
+  }
+  // 扣掉局部平均,只保留突出的打點
+  const pre = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) pre[i + 1] = pre[i] + env[i];
+  const out = new Float32Array(n), w = 32;
+  for (let i = 0; i < n; i++) {
+    const lo = Math.max(0, i - w), hi2 = Math.min(n, i + w + 1);
+    const m = (pre[hi2] - pre[lo]) / (hi2 - lo);
+    out[i] = Math.max(0, env[i] - m);
+  }
+  return out;
+}
+
+function _autocorr(env, maxLag) {
+  const n = env.length, r = new Float64Array(maxLag + 1);
+  let r0 = 0; for (let i = 0; i < n; i++) r0 += env[i] * env[i];
+  r0 = r0 / n + 1e-12;
+  for (let lag = 1; lag <= maxLag; lag++) {
+    let s = 0; for (let i = 0; i + lag < n; i++) s += env[i] * env[i + lag];
+    r[lag] = s / (n - lag) / r0;
+  }
+  r[0] = 1; return r;
+}
+
+function detectBeatGrid(x, sr, segStartSec) {
+  const env = _onsetEnvelope(x, sr), n = env.length, fr = sr / _HOP;
+  if (n < fr * 6) return null;
+  const maxLagNeeded = Math.min(n - 2, Math.ceil(4 * fr * 60 / 65) + 2);
+  const r = _autocorr(env, maxLagNeeded);
+  const rAt = (lag) => { if (lag >= maxLagNeeded) return 0; const i = Math.floor(lag), f = lag - i; return Math.max(0, r[i] * (1 - f) + r[i + 1] * f); };
+
+  // 1) 粗估:對 70~180 BPM 的每個候選,加總其整數倍週期的自相關(諧波加總),再乘上偏好 100~150 BPM 的先驗
+  let bestBpm = 120, bestScore = -1;
+  const w = [1, 0.75, 0.5, 0.35];
+  for (let bpm = 70; bpm <= 180; bpm += 0.25) {
+    const lag = 60 / bpm * fr;
+    let s = 0; for (let m = 1; m <= 4; m++) s += w[m - 1] * rAt(lag * m);
+    const prior = Math.exp(-0.5 * Math.pow(Math.log2(bpm / 125) / 0.5, 2));
+    s *= (0.55 + 0.45 * prior);
+    if (s > bestScore) { bestScore = s; bestBpm = bpm; }
+  }
+
+  // 2) 精修:在 ±3% 內以「梳狀濾波」同時搜尋 BPM 與相位(能量最大者)
+  const env3 = new Float32Array(n);
+  for (let i = 0; i < n; i++) env3[i] = 0.25 * (env[i - 1] || 0) + 0.5 * env[i] + 0.25 * (env[i + 1] || 0);
+  let best = { s: -1, bpm: bestBpm, phase: 0 };
+  for (let bpm = bestBpm * 0.97; bpm <= bestBpm * 1.03; bpm += 0.05) {
+    const P = 60 / bpm * fr, pMax = Math.ceil(P);
+    for (let ph = 0; ph < pMax; ph++) {
+      let s = 0, k = 0;
+      for (let t = ph; t < n - 1; t += P, k++) s += env3[Math.round(t)];
+      s /= k;
+      s *= 1 - 0.02 * Math.abs(bpm - bestBpm) / (bestBpm * 0.03);   // 稍微偏好粗估值
+      if (s > best.s) best = { s, bpm, phase: ph };
+    }
+  }
+  let bpm = best.bpm;
+  const rounded = Math.round(bpm);
+  if (Math.abs(bpm - rounded) < 0.07) bpm = rounded;   // 電子音樂多半是整數 BPM
+  // 用最終 BPM 重新只搜尋相位
+  const P = 60 / bpm * fr; let bp = { s: -1, ph: best.phase };
+  for (let ph = 0; ph < Math.ceil(P); ph++) {
+    let s = 0, k = 0; for (let t = ph; t < n - 1; t += P, k++) s += env3[Math.round(t)];
+    s /= k; if (s > bp.s) bp = { s, ph };
+  }
+  const beat = 60 / bpm;
+  const t0 = segStartSec + (bp.ph + 0.5) * _HOP / sr;
+  const offset = ((t0 % beat) + beat) % beat;
+  return { bpm, offset, confidence: best.s };
+}
+
+/* ---------- 調性 ---------- */
+function detectKey(x, sr) {
+  const d = Math.max(1, Math.round(sr / 11025)), srd = sr / d;
+  const m = Math.floor(x.length / d), y = new Float32Array(m);
+  for (let i = 0; i < m; i++) { let s = 0; for (let k = 0; k < d; k++) s += x[i * d + k]; y[i] = s / d; }
+  const size = 4096, hop = 2048;
+  const win = new Float64Array(size); for (let i = 0; i < size; i++) win[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / size);
+  const kMin = Math.ceil(110 * size / srd), kMax = Math.min(size / 2 - 1, Math.floor(1800 * size / srd));
+  const binPc = new Int8Array(size / 2).fill(-1), binW = new Float64Array(size / 2);
+  for (let k = kMin; k <= kMax; k++) {
+    const f = k * srd / size, midi = 69 + 12 * Math.log2(f /440), r = Math.round(midi);
+    if (Math.abs(midi - r) < 0.4) {                       // 只取靠近半音中心的頻點,減少相鄰音洩漏
+      binPc[k] = ((r % 12) + 12) % 12;
+      // 低頻加權:貝斯通常就是主音,能有效減少「五度混淆」(以 24 個調的合成曲實測 13/24 → 22/24)
+      binW[k] = Math.pow(Math.min(1, 220 / f), 1.5);
+    }
+  }
+  const chroma = new Float64Array(12), re = new Float64Array(size), im = new Float64Array(size);
+  for (let s = 0; s + size <= m; s += hop) {
+    for (let i = 0; i < size; i++) { re[i] = y[s + i] * win[i]; im[i] = 0; }
+    fftInPlace(re, im);
+    for (let k = kMin; k <= kMax; k++) { const pc = binPc[k]; if (pc >= 0) chroma[pc] += binW[k] * Math.pow(Math.hypot(re[k], im[k]), 0.75); }
+  }
+  let tot = 0; for (let i = 0; i < 12; i++) tot += chroma[i];
+  if (tot <= 0) return null;
+  for (let i = 0; i < 12; i++) chroma[i] /= tot;
+
+  const corr = (prof, rot) => {
+    let mc = 0, mp = 0; for (let i = 0; i < 12; i++) { mc += chroma[i]; mp += prof[i]; } mc /= 12; mp /= 12;
+    let num = 0, dc = 0, dp = 0;
+    for (let i = 0; i < 12; i++) { const a = chroma[i] - mc, b = prof[(i - rot + 12) % 12] - mp; num += a * b; dc += a * a; dp += b * b; }
+    return num / Math.sqrt(dc * dp + 1e-12);
+  };
+  const scores = [];
+  for (let root = 0; root < 12; root++) {
+    scores.push({ s: corr(KK_MAJOR, root), code: CAMELOT_MAJOR[root] });
+    scores.push({ s: corr(KK_MINOR, root), code: CAMELOT_MINOR[root] });
+  }
+  scores.sort((a, b) => b.s - a.s);
+  return { key: scores[0].code, confidence: scores[0].s - scores[1].s };
+}
+
+/* ---------- 整合 ---------- */
+function analyzeTrack(L, R, sr) {
+  const N = L.length, dur = N / sr;
+  // BPM:避開開頭 8 秒(常有無節奏的前奏),取最多 50 秒
+  const bStart = Math.min(Math.floor(8 * sr), Math.floor(N * 0.1));
+  const bLen = Math.min(N - bStart, Math.floor(50 * sr));
+  const bx = _monoSegment(L, R, bStart, bLen);
+  const grid = detectBeatGrid(bx, sr, bStart / sr);
+  // 調性:取 20% 處起最多 30 秒
+  const kStart = Math.min(Math.floor(N * 0.2), Math.max(0, N - Math.floor(30 * sr)));
+  const kx = _monoSegment(L, R, kStart, Math.min(N - kStart, Math.floor(30 * sr)));
+  const key = detectKey(kx, sr);
+  // 能量:整段 RMS 映射到 0..1
+  let e = 0; const step = 4; let cnt = 0;
+  for (let i = 0; i < N; i += step) { e += L[i] * L[i]; cnt++; }
+  const rmsDb = 10 * Math.log10(e / Math.max(1, cnt) + 1e-12);
+  const energy = Math.max(0, Math.min(1, (rmsDb + 26) / 14));
+  return {
+    bpm: grid ? grid.bpm : null, offset: grid ? grid.offset : 0,
+    key: key ? key.key : null, keyConfidence: key ? key.confidence : 0,
+    energy, duration: dur
+  };
+}
+
+/* ---------- 諧波混音排序(貪婪最近鄰,模擬 Tiësto 式由低往高堆疊能量) ---------- */
+function sortByHarmony(tracks, maxBpmDevPct) {
+  maxBpmDevPct = maxBpmDevPct == null ? 16 : maxBpmDevPct;
+  const ok = tracks.filter(t => t.bpm && t.key), rest = tracks.filter(t => !(t.bpm && t.key));
+  if (!ok.length) return tracks.slice();
+  const pool = ok.slice().sort((a, b) => a.bpm - b.bpm);
+  const out = [pool.shift()];
+  while (pool.length) {
+    const cur = out[out.length - 1];
+    let bestI = -1, bestCost = Infinity;
+    for (let i = 0; i < pool.length; i++) {
+      const c = pool[i];
+      const m = matchTempoRatio(c.bpm, cur.bpm, maxBpmDevPct / 100);
+      const bpmPct = Math.abs(m.ratio - 1) * 100;
+      if (!m.exact) continue;
+      const cost = compatibilityScore(cur.key, c.key) * 10 + bpmPct
+                 + 5 * Math.max(0, (cur.energy || 0) - (c.energy || 0));   // 盡量不要能量往下掉
+      if (cost < bestCost) { bestCost = cost; bestI = i; }
+    }
+    if (bestI < 0) {   // 沒有 BPM 可以接上的,退而求其次選最接近的
+      bestI = 0; let d = Infinity;
+      pool.forEach((c, i) => { const dd = Math.abs(c.bpm - cur.bpm); if (dd < d) { d = dd; bestI = i; } });
+    }
+    out.push(pool.splice(bestI, 1)[0]);
+  }
+  return out.concat(rest);
+}
+
+if (typeof globalThis !== 'undefined') Object.assign(globalThis, { __analysis: { analyzeTrack, compatibilityScore, sortByHarmony, matchTempoRatio, detectBeatGrid, detectKey } });
+
+/* ============================================================================
+ * 示範曲合成器:程序化產生四四拍電子舞曲(kick / hat / clap / bass / 和弦),
+ * 讓使用者不用先準備音檔就能試玩,也用來驗證 BPM 與調性偵測的準確度。
+ * ========================================================================== */
+function synthDemoTrack(opts) {
+  const sr = opts.sr || 32000, bpm = opts.bpm, bars = opts.bars || 24;
+  const root = opts.root, minor = !!opts.minor;
+  const beat = 60 / bpm, total = Math.floor(bars * 4 * beat * sr);
+  const out = new Float32Array(total);
+  let seed = (opts.seed || 1) >>> 0;
+  const rnd = () => { seed ^= seed << 13; seed >>>= 0; seed ^= seed >>> 17; seed ^= seed << 5; seed >>>= 0; return seed / 4294967296 * 2 - 1; };
+  const hz = (midi) => 440 * Math.pow(2, (midi - 69) / 12);
+  const TAU = 2 * Math.PI;
+  const LUT_N = 8192, LUT = new Float32Array(LUT_N + 1);
+  for (let i = 0; i <= LUT_N; i++) LUT[i] = Math.sin(TAU * i / LUT_N);
+  const sinc = (ph) => { const x = ph * LUT_N, i = x | 0; return LUT[i] + (LUT[i + 1] - LUT[i]) * (x - i); };   // ph ∈ [0,1)
+
+  // 和弦進行(以主音為 0 的半音):強調主和弦,調性才明確
+  const chords = minor ? [[0, 3, 7], [0, 3, 7], [5, 8, 12], [7, 10, 14]]
+                       : [[0, 4, 7], [0, 4, 7], [5, 9, 12], [7, 11, 14]];
+  const barLen = 4 * beat, chordLen = 2 * barLen;
+  // 每個和弦預先算好 12 個泛音頻率(3 音 × 4 泛音)與權重
+  const padInc = chords.map(ch => { const a = []; for (const iv of ch) for (let h = 1; h <= 4; h++) a.push(hz(48 + root + iv) * h / sr); return a; });
+  const padAmp = []; for (let n = 0; n < 3; n++) for (let h = 1; h <= 4; h++) padAmp.push(1 / (h * 1.4));
+  const padPh = new Float64Array(12);
+  const bassF = hz(36 + root), bassInc = bassF / sr;
+  let bassPh = 0, bassSubPh = 0, bassLp = 0, hatPrev = 0, clapLp = 0, kickPhase = 0;
+  let lastChord = -1;
+
+  for (let i = 0; i < total; i++) {
+    const t = i / sr, bar = (t / barLen) | 0, inBar = t - bar * barLen;
+    const beatIdx = (inBar / beat) | 0, tb = inBar - beatIdx * beat;
+    let v = 0;
+
+    // Kick:每拍一下,音高從 160Hz 掃到 48Hz
+    if (tb < 0.4) {
+      kickPhase += (48 + 112 * Math.exp(-tb * 28)) / sr; if (kickPhase >= 1) kickPhase -= 1;
+      v += 0.85 * sinc(kickPhase) * Math.exp(-tb * 7.5);
+      if (tb < 0.004) v += 0.5 * (1 - tb / 0.004) * sinc((1500 * tb) % 1);   // 起音的敲擊感
+    } else kickPhase = 0;
+    const duck = 1 - 0.75 * Math.exp(-tb * 10);   // 側鏈:kick 出現時壓低其他聲部
+
+    // Hi-hat:反拍 8 分音符
+    const th = tb - beat / 2;
+    if (th >= 0 && th < 0.07) { const n = rnd(); v += 0.22 * (n - hatPrev) * Math.exp(-th * 70); hatPrev = n; } else hatPrev = 0;
+
+    // Clap:第 2、4 拍
+    if ((beatIdx === 1 || beatIdx === 3) && tb < 0.15) {
+      const n = rnd(); clapLp += 0.35 * (n - clapLp);
+      v += 0.32 * (n - clapLp) * Math.exp(-tb * 22);
+    }
+
+    if (bar >= 2) {   // 前兩小節只有鼓
+      // 貝斯:反拍 8 分音符,主音,octave 2
+      const bt = (inBar + beat / 2) % beat;
+      bassPh += bassInc; if (bassPh >= 1) bassPh -= 1;
+      const saw = 2 * bassPh - 1;
+      bassLp += 0.06 * (saw - bassLp);
+      v += duck * Math.exp(-bt * 5.5) * (0.42 * bassLp + 0.28 * sinc(bassPh));
+
+      // 和弦墊音(每兩小節換一個和弦,切換處各留 30ms 淡入淡出避免爆音)
+      const ci = ((bar / 2) | 0) % 4, tc = t - Math.floor(t / chordLen) * chordLen;
+      if (ci !== lastChord) { lastChord = ci; }
+      const inc = padInc[ci];
+      let pad = 0;
+      for (let k = 0; k < 12; k++) { let ph = padPh[k] + inc[k]; if (ph >= 1) ph -= 1; padPh[k] = ph; pad += sinc(ph) * padAmp[k]; }
+      const env = Math.min(1, tc / 0.03, (chordLen - tc) / 0.03);
+      v += duck * 0.075 * pad * (env > 0 ? env : 0);
+    }
+    v *= 1.05;
+    out[i] = v / (1 + Math.abs(v) * 0.6);   // 柔性削波
+  }
+  return out;
+}
+
+function encodeWav16(samples, sr) {
+  const n = samples.length, buf = new ArrayBuffer(44 + n * 2), dv = new DataView(buf);
+  const w = (o, s) => { for (let i = 0; i < s.length; i++) dv.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, 'RIFF'); dv.setUint32(4, 36 + n * 2, true); w(8, 'WAVE'); w(12, 'fmt ');
+  dv.setUint32(16, 16, true); dv.setUint16(20, 1, true); dv.setUint16(22, 1, true);
+  dv.setUint32(24, sr, true); dv.setUint32(28, sr * 2, true); dv.setUint16(32, 2, true); dv.setUint16(34, 16, true);
+  w(36, 'data'); dv.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) { const s = Math.max(-1, Math.min(1, samples[i])); dv.setInt16(44 + i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true); }
+  return new Uint8Array(buf);
+}
+
+/* 四首示範曲:Camelot 8A → 9A → 9B → 10A,彼此諧波相容、BPM 逐步上升 */
+const DEMO_TRACKS = [
+  { title: 'Demo 1 · 午夜列車', artist: 'DJ Mixer 示範', bpm: 124, root: 9, minor: true, seed: 11 },   // A 小調 = 8A
+  { title: 'Demo 2 · 霓虹街區', artist: 'DJ Mixer 示範', bpm: 126, root: 4, minor: true, seed: 22 },   // E 小調 = 9A
+  { title: 'Demo 3 · 日出高台', artist: 'DJ Mixer 示範', bpm: 128, root: 7, minor: false, seed: 33 },  // G 大調 = 9B
+  { title: 'Demo 4 · 深水區', artist: 'DJ Mixer 示範', bpm: 128, root: 11, minor: true, seed: 44 },    // B 小調 = 10A
+];
+
+if (typeof globalThis !== 'undefined') Object.assign(globalThis, { __synth: { synthDemoTrack, encodeWav16, DEMO_TRACKS } });
+
+/* ============================================================================
+ * 曲庫儲存(IndexedDB)+ 音源提供者(Source Provider)+ 匯入流程
+ *
+ * 音源架構:每個 provider 只負責「列出項目」和「把項目變成 Blob」,
+ * 之後統一走 Importer.importBlob():解碼 → 分析 BPM/調性 → 存進曲庫。
+ * 要新增雲端服務(例如 Google Drive),實作同樣的 list()/fetchBlob() 即可。
+ * ========================================================================== */
+
+/* ---------- 曲庫儲存 ---------- */
+const Store = {
+  db: null, mem: { meta: new Map(), audio: new Map() },   // IndexedDB 不可用時(如無痕模式)退回記憶體,關閉頁面就會消失
+  persistent: false,
+
+  async open() {
+    try {
+      this.db = await new Promise((res, rej) => {
+        const rq = indexedDB.open('djmixer', 1);
+        rq.onupgradeneeded = () => { const db = rq.result; db.createObjectStore('meta', { keyPath: 'id' }); db.createObjectStore('audio'); };
+        rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error); rq.onblocked = () => rej(new Error('blocked'));
+      });
+      this.persistent = true;
+      if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+    } catch (e) { this.db = null; this.persistent = false; }
+  },
+  _req(r) { return new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  _done(tx) { return new Promise((res, rej) => { tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error || new Error('寫入失敗,可能是儲存空間不足')); }); },
+
+  async listMeta() {
+    if (!this.db) return Array.from(this.mem.meta.values());
+    return this._req(this.db.transaction('meta').objectStore('meta').getAll());
+  },
+  async putTrack(meta, blob) {
+    if (!this.db) { this.mem.meta.set(meta.id, meta); this.mem.audio.set(meta.id, blob); return; }
+    const tx = this.db.transaction(['meta', 'audio'], 'readwrite');
+    tx.objectStore('meta').put(meta); tx.objectStore('audio').put(blob, meta.id);
+    return this._done(tx);
+  },
+  async putMeta(meta) {
+    if (!this.db) { this.mem.meta.set(meta.id, meta); return; }
+    const tx = this.db.transaction('meta', 'readwrite'); tx.objectStore('meta').put(meta); return this._done(tx);
+  },
+  async getBlob(id) {
+    if (!this.db) return this.mem.audio.get(id);
+    return this._req(this.db.transaction('audio').objectStore('audio').get(id));
+  },
+  async remove(id) {
+    if (!this.db) { this.mem.meta.delete(id); this.mem.audio.delete(id); return; }
+    const tx = this.db.transaction(['meta', 'audio'], 'readwrite');
+    tx.objectStore('meta').delete(id); tx.objectStore('audio').delete(id); return this._done(tx);
+  },
+  async usage() {
+    try { if (navigator.storage && navigator.storage.estimate) { const e = await navigator.storage.estimate(); return e; } } catch (e) {}
+    return null;
+  }
+};
+
+/* ---------- 匯入流程:解碼 → 分析 → 存檔 ---------- */
+const AUDIO_EXT = /\.(mp3|m4a|aac|wav|flac|ogg|oga|opus|aif|aiff|caf|mp4)$/i;
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+function titleFromName(n) { return n.replace(/\.[^.]+$/, '').replace(/[_]+/g, ' ').trim() || '未命名'; }
+
+const Importer = {
+  async importBlob(engine, blob, info) {
+    const ab = await blob.arrayBuffer();
+    const buf = await engine.decode(ab);
+    await new Promise(r => setTimeout(r, 0));            // 讓 UI 有機會更新
+    const L = buf.getChannelData(0), R = buf.numberOfChannels > 1 ? buf.getChannelData(1) : null;
+    const a = analyzeTrack(L, R, buf.sampleRate);
+    const meta = {
+      id: uid(), title: info.title, artist: info.artist || '', source: info.source || 'local',
+      bpm: a.bpm, offset: a.offset, key: a.key, energy: a.energy, duration: a.duration,
+      size: blob.size, added: Date.now()
+    };
+    await Store.putTrack(meta, blob);
+    return meta;
+  }
+};
+
+/* ---------- Provider:本機檔案 ---------- */
+class LocalFileProvider {
+  constructor() { this.id = 'local'; this.name = '本機檔案'; this.available = true; }
+  /* files: FileList(來自 <input type=file>) */
+  items(files) { return Array.from(files).map(f => ({ title: titleFromName(f.name), blob: f, source: 'local' })); }
+}
+
+/* ---------- Provider:網址(檔案主機必須允許 CORS,例如 GitHub Pages / Cloudflare R2 / 自己的伺服器) ---------- */
+class UrlProvider {
+  constructor() { this.id = 'url'; this.name = '網址'; this.available = true; }
+  async fetchBlob(url, onProgress) {
+    const r = await fetch(url, { mode: 'cors' });
+    if (!r.ok) throw new Error('下載失敗(HTTP ' + r.status + ')');
+    const total = +r.headers.get('content-length') || 0;
+    if (!r.body || !r.body.getReader) return r.blob();
+    const reader = r.body.getReader(), chunks = []; let got = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value); got += value.length;
+      if (onProgress && total) onProgress(got / total);
+    }
+    return new Blob(chunks, { type: r.headers.get('content-type') || 'audio/mpeg' });
+  }
+  titleFromUrl(url) { try { return titleFromName(decodeURIComponent(new URL(url).pathname.split('/').pop())); } catch (e) { return '網址曲目'; } }
+}
+
+/* ---------- Provider:Dropbox(雲端硬碟的示範實作) ----------
+ * 用 Dropbox API v2(支援瀏覽器 CORS)。授權有兩種方式:
+ *   1. 貼上 Access Token(到 Dropbox App Console 的自己的 App 頁面 Generate)——最簡單,適合自用
+ *   2. OAuth2 PKCE:輸入 App key,導向 Dropbox 授權後回到本頁(需在 App Console 登記本頁網址為 Redirect URI)
+ * 注意:這個 provider 我沒有辦法在沙盒中對真正的 Dropbox 帳號做端對端測試。 */
+class DropboxProvider {
+  constructor() { this.id = 'dropbox'; this.name = 'Dropbox'; this.available = true; }
+  get token() { return localStorage.getItem('dbx_token') || ''; }
+  set token(v) { if (v) localStorage.setItem('dbx_token', v); else localStorage.removeItem('dbx_token'); }
+  _arg(o) { return JSON.stringify(o).replace(/[\u007f-\uffff]/g, c => '\\u' + ('0000' + c.charCodeAt(0).toString(16)).slice(-4)); }
+
+  async list(path) {
+    const r = await fetch('https://api.dropboxapi.com/2/files/list_folder', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + this.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: path || '', recursive: false, limit: 300 })
+    });
+    if (!r.ok) throw new Error('Dropbox 錯誤 ' + r.status + ':' + (await r.text()).slice(0, 120));
+    const j = await r.json();
+    return j.entries.filter(e => e['.tag'] === 'folder' || (e['.tag'] === 'file' && AUDIO_EXT.test(e.name)));
+  }
+  async fetchBlob(entry, onProgress) {
+    const r = await fetch('https://content.dropboxapi.com/2/files/download', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + this.token, 'Dropbox-API-Arg': this._arg({ path: entry.path_lower }) }
+    });
+    if (!r.ok) throw new Error('下載失敗(HTTP ' + r.status + ')');
+    return r.blob();
+  }
+  async startOAuth(appKey) {
+    const bytes = crypto.getRandomValues(new Uint8Array(48));
+    const b64 = (buf) => btoa(String.fromCharCode.apply(null, new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const verifier = b64(bytes);
+    const challenge = b64(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)));
+    sessionStorage.setItem('dbx_verifier', verifier); localStorage.setItem('dbx_key', appKey);
+    const redirect = location.origin + location.pathname;
+    location.href = 'https://www.dropbox.com/oauth2/authorize?response_type=code&code_challenge_method=S256'
+      + '&client_id=' + encodeURIComponent(appKey) + '&code_challenge=' + challenge + '&redirect_uri=' + encodeURIComponent(redirect);
+  }
+  async finishOAuth() {
+    const code = new URLSearchParams(location.search).get('code'), verifier = sessionStorage.getItem('dbx_verifier');
+    if (!code || !verifier) return false;
+    const body = new URLSearchParams({ grant_type: 'authorization_code', code, client_id: localStorage.getItem('dbx_key') || '',
+      redirect_uri: location.origin + location.pathname, code_verifier: verifier });
+    const r = await fetch('https://api.dropboxapi.com/oauth2/token', { method: 'POST', body });
+    history.replaceState(null, '', location.pathname);
+    if (!r.ok) throw new Error('Dropbox 授權失敗');
+    this.token = (await r.json()).access_token; sessionStorage.removeItem('dbx_verifier');
+    return true;
+  }
+}
+
+/* ---------- SoundCloud / Tidal / Apple Music:瀏覽器做不到的 ---------- */
+const UNAVAILABLE_PROVIDERS = [
+  { id: 'soundcloud', name: 'SoundCloud', why: '官方 API 只提供內嵌播放器,不提供原始音訊串流給第三方混音,Web Audio 拿不到波形資料。' },
+  { id: 'tidal', name: 'Tidal', why: '串流內容有 DRM 加密,只能在官方播放器內解密,無法送進自己的音訊引擎。' },
+  { id: 'applemusic', name: 'Apple Music / Spotify', why: '同樣是 DRM 串流,授權條款也不允許轉進第三方混音。' },
+];
+
+/* ============================================================================
+ * 音訊引擎(瀏覽器端):把 AudioWorklet 的 DeckProcessor 串進節點圖
+ *
+ *  deck worklet → lpf(刷碟/Filter FX) → wash(Automix 收尾濾波) → low(低頻搖桿,Bass Swap 用)
+ *   → Echo → Flanger → Bitcrush → Reverb → vol(音量推桿) → xf(Crossfader) → master → limiter → 喇叭
+ * ========================================================================== */
+
+/* ---------- FX 單元(dry/wet 或 send 型) ---------- */
+function makeEcho(ctx) {
+  const input = ctx.createGain(), output = ctx.createGain(), send = ctx.createGain();
+  const delay = ctx.createDelay(2), fb = ctx.createGain(), wet = ctx.createGain();
+  send.gain.value = 0; fb.gain.value = 0.45; wet.gain.value = 0.6; delay.delayTime.value = 0.35;
+  input.connect(output);
+  input.connect(send); send.connect(delay); delay.connect(fb); fb.connect(delay);
+  delay.connect(wet); wet.connect(output);
+  return { input, output, send, delay, setTime(t) { delay.delayTime.setTargetAtTime(Math.max(0.02, Math.min(1.9, t)), ctx.currentTime, 0.05); } };
+}
+
+function makeReverb(ctx, ir) {
+  const input = ctx.createGain(), output = ctx.createGain(), send = ctx.createGain();
+  const conv = ctx.createConvolver(), wet = ctx.createGain();
+  conv.buffer = ir; send.gain.value = 0; wet.gain.value = 0.8;
+  input.connect(output); input.connect(send); send.connect(conv); conv.connect(wet); wet.connect(output);
+  return { input, output, send };
+}
+
+function makeFlanger(ctx) {
+  const input = ctx.createGain(), output = ctx.createGain(), wet = ctx.createGain();
+  const delay = ctx.createDelay(0.05), fb = ctx.createGain();
+  const lfo = ctx.createOscillator(), depth = ctx.createGain();
+  delay.delayTime.value = 0.004; fb.gain.value = 0.55; wet.gain.value = 0;
+  lfo.frequency.value = 0.27; depth.gain.value = 0.0028;
+  lfo.connect(depth); depth.connect(delay.delayTime); lfo.start();
+  input.connect(output); input.connect(delay); delay.connect(fb); fb.connect(delay);
+  delay.connect(wet); wet.connect(output);
+  return { input, output, wet };
+}
+
+function makeReverbIR(ctx, seconds) {
+  const sr = ctx.sampleRate, len = Math.floor(sr * seconds), buf = ctx.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch); let lp = 0, seed = 12345 + ch * 777;
+    for (let i = 0; i < len; i++) {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      const n = seed / 4294967296 * 2 - 1, t = i / len;
+      lp += (0.25 + 0.5 * (1 - t)) * (n - lp);            // 越到尾巴越暗
+      d[i] = lp * Math.pow(1 - t, 3.2) * (i < sr * 0.012 ? i / (sr * 0.012) : 1);
+    }
+  }
+  return buf;
+}
+
+/* ---------- iOS 音訊解鎖 ---------- */
+function unlockIOSAudio() {
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+  // 播放無聲 <audio>,讓 iOS 把 session 切到 playback:靜音開關打開時 Web Audio 也能出聲
+  try {
+    const wav = encodeWav16(new Float32Array(2205), 22050);
+    const a = document.createElement('audio');
+    a.src = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
+    a.loop = true; a.setAttribute('playsinline', ''); a.play().catch(() => {});
+    window.__silentAudio = a;
+  } catch (e) {}
+}
+
+/* ---------- 單一 Deck ---------- */
+class DeckChannel {
+  constructor(engine, id) {
+    const ctx = engine.ctx;
+    this.engine = engine; this.ctx = ctx; this.id = id;
+    this.node = new AudioWorkletNode(ctx, 'deck-processor', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [2] });
+    this.node.port.onmessage = (e) => this._onMsg(e.data);
+
+    const biq = (type, f, g) => { const b = ctx.createBiquadFilter(); b.type = type; b.frequency.value = f; if (g != null) b.gain.value = g; return b; };
+    this.lpf = biq('lowpass', 20000); this.lpf.Q.value = 0.7;
+    this.wash = biq('lowpass', 20000); this.wash.Q.value = 0.5;
+    this.low = biq('lowshelf', 180, 0);
+    this.echo = makeEcho(ctx); this.flanger = makeFlanger(ctx); this.reverb = makeReverb(ctx, engine.reverbIR);
+    this.crush = new AudioWorkletNode(ctx, 'bitcrush', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [2] });
+    this.vol = ctx.createGain(); this.xf = ctx.createGain();
+    this.analyser = ctx.createAnalyser(); this.analyser.fftSize = 512;
+    this._meterBuf = new Float32Array(512);
+
+    this.node.connect(this.lpf); this.lpf.connect(this.wash); this.wash.connect(this.low);
+    this.low.connect(this.echo.input); this.echo.output.connect(this.flanger.input);
+    this.flanger.output.connect(this.crush); this.crush.connect(this.reverb.input);
+    this.reverb.output.connect(this.vol); this.vol.connect(this.analyser); this.vol.connect(this.xf);
+    this.xf.connect(engine.master);
+
+    this.meta = null; this.loaded = false; this.loading = false; this.N = 0; this.peaks = null;
+    this.rep = { pos: 0, frame: 0, rate: 0, t: performance.now(), playing: false, scratch: false, loop: { on: false, a: 0, b: 0 } };
+    this.tempoRatio = 1; this.tempoRange = 0.16; this.keylock = true;
+    this.volume = 0.85; this.cue = 0; this.loopBeats = 4;
+    this.fx = { filter: false, echo: false, reverb: false, flanger: false, crush: false };
+    this.scratching = false; this.scratchRateUI = 0;
+    this.onchange = null;
+    this.setVolume(0.85);
+  }
+
+  _post(m, transfer) { this.node.port.postMessage(m, transfer || []); }
+  _emit(what) { if (this.onchange) this.onchange(what); }
+
+  _onMsg(m) {
+    if (m.t === 'pos') {
+      const was = this.rep.playing, wasLoop = this.rep.loop.on;
+      this.rep = { pos: m.pos, frame: m.frame, rate: m.rate, t: performance.now(), playing: m.playing, scratch: m.scratch, loop: m.loop };
+      if (was !== m.playing || wasLoop !== m.loop.on) this._emit('state');
+    } else if (m.t === 'ended') {
+      this._emit('state'); this.engine.emit('ended', this);
+    }
+  }
+
+  /* ----- 載入 ----- */
+  loadAudio(buf, meta) {
+    const L = new Float32Array(buf.getChannelData(0));
+    const R = buf.numberOfChannels > 1 ? new Float32Array(buf.getChannelData(1)) : null;
+    this.peaks = computePeaks(L, R || L, 900);
+    this.N = L.length; this.meta = meta; this.loaded = true; this.loading = false;
+    this.cue = Math.round((meta.offset || 0) * this.ctx.sampleRate);
+    this.rep = { pos: 0, frame: 0, rate: 0, t: performance.now(), playing: false, scratch: false, loop: { on: false, a: 0, b: 0 } };
+    this._post({ t: 'load', L, R }, R ? [L.buffer, R.buffer] : [L.buffer]);
+    this.setTempoRatio(1);
+    this.setKeylock(this.keylock);
+    this._emit('load');
+  }
+
+  /* ----- 時間/位置 ----- */
+  getPosSamples() {
+    if (!this.loaded) return 0;
+    const r = this.rep, dt = (performance.now() - r.t) / 1000;
+    let p = r.pos + dt * r.rate * this.ctx.sampleRate;
+    if (r.loop.on && p >= r.loop.b) p = r.loop.a + ((p - r.loop.a) % (r.loop.b - r.loop.a));
+    return Math.max(0, Math.min(this.N, p));
+  }
+  getPosSec() { return this.getPosSamples() / this.ctx.sampleRate; }
+  duration() { return this.loaded ? this.N / this.ctx.sampleRate : 0; }
+  effectiveBpm() { return this.meta && this.meta.bpm ? this.meta.bpm * this.tempoRatio : 0; }
+  get playing() { return this.rep.playing; }
+
+  _freeze(playing, rate) {   // 樂觀更新,讓 UI 不必等 worklet 回報
+    this.rep = Object.assign({}, this.rep, { pos: this.getPosSamples(), t: performance.now(), playing, rate });
+  }
+
+  /* ----- 傳輸控制 ----- */
+  play() { if (!this.loaded) return; this._post({ t: 'play' }); this._freeze(true, this.tempoRatio); this._emit('state'); }
+  pause() { if (!this.loaded) return; this._post({ t: 'pause' }); this._freeze(false, 0); this._emit('state'); }
+  togglePlay() { this.rep.playing ? this.pause() : this.play(); }
+  playAt(frame) { this._post({ t: 'playAt', frame }); }
+  seekSamples(p) { if (!this.loaded) return; this._post({ t: 'seek', pos: p }); this._freeze(this.rep.playing, this.rep.rate); this.rep.pos = p; }
+  seekSec(s) { this.seekSamples(s * this.ctx.sampleRate); }
+  /* CDJ 式 Cue:播放中按 = 回到 Cue 點並暫停;暫停中按 = 把目前位置設為 Cue 點 */
+  cueButton() {
+    if (!this.loaded) return;
+    if (this.rep.playing) { this.pause(); this.seekSamples(this.cue); }
+    else { this.cue = this.getPosSamples(); this._emit('cue'); }
+  }
+
+  /* ----- 速度 ----- */
+  setTempoRatio(r) {
+    const lo = 1 - this.tempoRange, hi = 1 + this.tempoRange;
+    this.tempoRatio = Math.max(lo, Math.min(hi, r));
+    this._post({ t: 'tempo', v: this.tempoRatio });
+    this._updateEchoTime(); this._emit('tempo');
+  }
+  setTempoRange(range) { this.tempoRange = range; this.setTempoRatio(this.tempoRatio); }
+  setKeylock(on) { this.keylock = !!on; this._post({ t: 'keylock', on: this.keylock }); this._emit('keylock'); }
+
+  /* SYNC:速度對齊另一個 deck,若兩邊都在播放再把拍點相位對齊 */
+  syncTo(other) {
+    if (!this.loaded || !other || !other.loaded || !this.meta.bpm || !other.effectiveBpm()) return false;
+    const m = matchTempoRatio(this.meta.bpm, other.effectiveBpm(), this.tempoRange);
+    this.setTempoRatio(m.ratio);
+    if (this.rep.playing && other.rep.playing && this.meta.offset != null && other.meta.offset != null) {
+      const sr = this.ctx.sampleRate, F = Math.max(this.rep.frame, other.rep.frame);
+      const at = (d) => d.rep.pos + (F - d.rep.frame) * d.rep.rate;           // 兩邊都推算到同一個 context frame,不受訊息延遲影響
+      const beatThis = 60 / (this.meta.bpm * m.mult), beatOther = 60 / other.meta.bpm;
+      const ph = (d, beat) => { const x = (at(d) / sr - d.meta.offset) / beat; return x - Math.floor(x); };
+      let d = ph(other, beatOther) - ph(this, beatThis);
+      d -= Math.round(d);                                                       // 取 [-0.5, 0.5)
+      this._post({ t: 'nudge', delta: d * beatThis * sr });
+    }
+    return true;
+  }
+
+  /* ----- Loop(進點量化到最近拍點) ----- */
+  _beatSamples() { return 60 / ((this.meta && this.meta.bpm) || 120) * this.ctx.sampleRate; }
+  loopIn(beats) {
+    if (!this.loaded) return;
+    const sr = this.ctx.sampleRate, bs = this._beatSamples(), grid = ((this.meta && this.meta.offset) || 0) * sr;
+    const a = grid + Math.round((this.getPosSamples() - grid) / bs) * bs;
+    this._post({ t: 'loop', a, b: a + beats * bs });
+  }
+  loopOff() { this._post({ t: 'loopOff' }); this.rep.loop = Object.assign({}, this.rep.loop, { on: false }); this._emit('state'); }
+  toggleLoop() { this.rep.loop.on ? this.loopOff() : this.loopIn(this.loopBeats); }
+  setLoopBeats(b) {
+    this.loopBeats = b;
+    if (this.rep.loop.on) { const a = this.rep.loop.a; this._post({ t: 'loop', a, b: a + b * this._beatSamples() }); }
+    this._emit('loopsize');
+  }
+
+  /* ----- 音量 / FX ----- */
+  setVolume(v) { this.volume = v; this.vol.gain.setTargetAtTime(v * v, this.ctx.currentTime, 0.015); }
+  _updateEchoTime() { const b = this.effectiveBpm(); this.echo.setTime(b ? 60 / b * 0.75 : 0.35); }
+  _updateLpf() {
+    let f = 20000, q = 0.7;
+    if (this.fx.filter) { f = 900; q = 4; }
+    if (this.scratching) { f = Math.min(f, 1200 + 7000 * Math.min(3, Math.abs(this.scratchRateUI))); q = Math.max(q, 1.5); }
+    const tc = this.scratching ? 0.01 : 0.08, t = this.ctx.currentTime;
+    this.lpf.frequency.setTargetAtTime(f, t, tc); this.lpf.Q.setTargetAtTime(q, t, tc);
+  }
+  setFx(name, on) {
+    this.fx[name] = on; const t = this.ctx.currentTime;
+    if (name === 'filter') this._updateLpf();
+    else if (name === 'echo') { this._updateEchoTime(); this.echo.send.gain.setTargetAtTime(on ? 0.7 : 0, t, 0.02); }
+    else if (name === 'reverb') this.reverb.send.gain.setTargetAtTime(on ? 0.55 : 0, t, 0.03);
+    else if (name === 'flanger') this.flanger.wet.gain.setTargetAtTime(on ? 0.75 : 0, t, 0.03);
+    else if (name === 'crush') this.crush.parameters.get('mix').setTargetAtTime(on ? 1 : 0, t, 0.02);
+    this._emit('fx');
+  }
+
+  /* ----- 刷碟 ----- */
+  scratchStart() { if (!this.loaded) return false; this.scratching = true; this.scratchRateUI = 0; this._post({ t: 'scratchStart' }); this._updateLpf(); return true; }
+  scratchMove(rate) { this.scratchRateUI = rate; this._post({ t: 'scratchRate', v: rate }); this._updateLpf(); }
+  scratchEnd() { if (!this.scratching) return; this.scratching = false; this._post({ t: 'scratchEnd' }); this._updateLpf(); }
+
+  /* ----- UI 用的即時資訊 ----- */
+  beatState() {
+    if (!this.meta || !this.meta.bpm) return null;
+    const beat = 60 / this.meta.bpm, x = (this.getPosSec() - (this.meta.offset || 0)) / beat, i = Math.floor(x);
+    return { n: ((i % 4) + 4) % 4, phase: x - i };
+  }
+  level() {
+    this.analyser.getFloatTimeDomainData(this._meterBuf);
+    let m = 0; for (let i = 0; i < this._meterBuf.length; i++) { const v = Math.abs(this._meterBuf[i]); if (v > m) m = v; }
+    return m;
+  }
+}
+
+/* 產生波形總覽用的 min/max 峰值 */
+function computePeaks(L, R, cols) {
+  const N = L.length, step = N / cols, out = new Float32Array(cols * 2);
+  for (let c = 0; c < cols; c++) {
+    const s = Math.floor(c * step), e = Math.min(N, Math.floor((c + 1) * step));
+    let mn = 0, mx = 0, inc = Math.max(1, Math.floor((e - s) / 64));
+    for (let i = s; i < e; i += inc) { const v = 0.5 * (L[i] + R[i]); if (v < mn) mn = v; if (v > mx) mx = v; }
+    out[c * 2] = mn; out[c * 2 + 1] = mx;
+  }
+  return out;
+}
+
+/* ---------- Engine ---------- */
+class Engine {
+  constructor() { this.ctx = null; this.ready = false; this.decks = {}; this.xfPos = 0; this.listeners = {}; this.automated = false; }
+  on(ev, fn) { (this.listeners[ev] = this.listeners[ev] || []).push(fn); }
+  emit(ev, a) { (this.listeners[ev] || []).forEach(f => f(a)); }
+
+  async init(workletUrl) {
+    if (this.ready) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) throw new Error('這個瀏覽器不支援 Web Audio');
+    this.ctx = new AC({ latencyHint: 'interactive' });
+    if (!this.ctx.audioWorklet) throw new Error('需要 iOS 14.5 以上(支援 AudioWorklet)');
+    unlockIOSAudio();
+    try { await this.ctx.resume(); } catch (e) {}
+    await this.ctx.audioWorklet.addModule(workletUrl);
+
+    this.master = this.ctx.createGain(); this.master.gain.value = 0.9;
+    this.limiter = this.ctx.createDynamicsCompressor();
+    Object.assign(this.limiter.threshold, { value: -3 }); this.limiter.knee.value = 2;
+    this.limiter.ratio.value = 18; this.limiter.attack.value = 0.003; this.limiter.release.value = 0.12;
+    this.master.connect(this.limiter); this.limiter.connect(this.ctx.destination);
+
+    this.reverbIR = makeReverbIR(this.ctx, 2.2);
+    this.decks.A = new DeckChannel(this, 'A');
+    this.decks.B = new DeckChannel(this, 'B');
+    this.setCrossfader(0, true);
+    this.ctx.onstatechange = () => this.emit('state', this.ctx.state);
+    this.ready = true;
+  }
+
+  resume() { if (this.ctx && this.ctx.state !== 'running') return this.ctx.resume().catch(() => {}); }
+
+  decode(arrayBuffer) {
+    return new Promise((res, rej) => {
+      const p = this.ctx.decodeAudioData(arrayBuffer, res, rej);
+      if (p && p.catch) p.catch(rej);
+    });
+  }
+
+  /* 等功率 Crossfader:p ∈ [-1(全A), 1(全B)] */
+  static xfGains(p) { const th = (p + 1) / 2 * Math.PI / 2; return { a: Math.cos(th), b: Math.sin(th) }; }
+  setCrossfader(p, instant) {
+    this.xfPos = Math.max(-1, Math.min(1, p));
+    const g = Engine.xfGains(this.xfPos), t = this.ctx.currentTime;
+    for (const [id, v] of [['A', g.a], ['B', g.b]]) {
+      const P = this.decks[id].xf.gain;
+      P.cancelScheduledValues(t);
+      if (instant) P.setValueAtTime(v, t); else P.setTargetAtTime(v, t, 0.012);
+    }
+    this.automated = false;
+  }
+}
+
+/* ============================================================================
+ * Automix:自動混音
+ *  1. 佇列依「Camelot 調性相容 + BPM 接近」排序(sortByHarmony)
+ *  2. 目前曲子剩下 (過渡長度 + 8 秒) 時,把下一首預先載入到閒置的 deck
+ *  3. 過渡開始點對齊目前曲子的「下一個小節線」:算出該小節線的 context frame,
+ *     用 worklet 的 playAt(frame) 在「那一個取樣點」起播,兩首拍點就會自然疊合
+ *  4. Crossfader 用 AudioParam.setValueCurveAtTime 排程(不靠主執行緒計時器),
+ *     搭配 Bass Swap(舊曲低頻退、新曲低頻進)與舊曲的收尾低通濾波
+ * ========================================================================== */
+class Automix {
+  constructor(app) {
+    this.app = app;
+    this.running = false; this.phase = 'idle';       // idle | playing | transition
+    this.queue = []; this.activeId = 'A'; this.trans = null;
+    this.nextMeta = null; this.nextReady = false; this.prepToken = 0;
+    this.opts = { beats: 16, bassSwap: true, wash: true };
+    this.timer = null; this.rampTimer = null;
+    this.onchange = null;
+    this.current = null;
+  }
+  get eng() { return this.app.engine; }
+  deck(id) { return this.eng.decks[id]; }
+  idleId() { return this.activeId === 'A' ? 'B' : 'A'; }
+  _emit() { if (this.onchange) this.onchange(); }
+
+  async start(list) {
+    if (!list.length) return;
+    this.queue = list.slice(); this.running = true; this.phase = 'starting'; this._emit();
+    const first = this.queue.shift(); this.current = first;
+    this.activeId = 'A';
+    try { await this.app.loadToDeck('A', first); }
+    catch (e) { this.stop(); throw e; }
+    const d = this.deck('A');
+    d.setKeylock(true); d.setTempoRatio(1); d.seekSamples(d.cue);
+    this.eng.setCrossfader(-1, true);
+    d.play();
+    this.phase = 'playing';
+    this.timer = setInterval(() => this.tick(), 250);
+    this._prepareNext(); this._emit();
+  }
+
+  stop() {
+    if (this.timer) clearInterval(this.timer); this.timer = null;
+    if (this.rampTimer) clearInterval(this.rampTimer); this.rampTimer = null;
+    if (this.phase === 'transition') {           // 中途停止:凍結在目前的 Crossfader 位置,並還原 EQ / 濾波
+      const p = this.crossfaderPos(); this.eng.setCrossfader(p == null ? this.eng.xfPos : p, true);
+      for (const id of ['A', 'B']) this._resetDeckFx(this.deck(id));
+    }
+    this.running = false; this.phase = 'idle'; this.trans = null; this.prepToken++;
+    this._emit();
+  }
+
+  _resetDeckFx(d) {
+    const t = this.eng.ctx.currentTime;
+    d.low.gain.cancelScheduledValues(t); d.low.gain.setValueAtTime(0, t);
+    d.wash.frequency.cancelScheduledValues(t); d.wash.frequency.setValueAtTime(20000, t);
+  }
+
+  async _prepareNext() {
+    const token = ++this.prepToken;
+    this.nextReady = false; this.nextMeta = this.queue[0] || null;
+    if (!this.nextMeta) { this._emit(); return; }
+    try {
+      await this.app.loadToDeck(this.idleId(), this.nextMeta);
+      if (token !== this.prepToken || !this.running) return;
+      this.nextReady = true;
+    } catch (e) {
+      if (token !== this.prepToken) return;
+      this.app.toast('載入下一首失敗:' + e.message);
+      this.queue.shift(); this._prepareNext(); return;
+    }
+    this._emit();
+  }
+
+  remainingSec() {
+    const a = this.deck(this.activeId);
+    return a.loaded ? (a.duration() - a.getPosSec()) / Math.max(0.5, a.tempoRatio) : 0;
+  }
+
+  tick() {
+    if (!this.running) return;
+    const eng = this.eng, a = this.deck(this.activeId);
+    if (this.phase === 'playing') {
+      const remain = this.remainingSec();
+      const bpm = a.effectiveBpm() || 124, D = this.opts.beats * 60 / bpm;
+      if (this.nextReady && (remain <= D + 8)) this.beginTransition(D, remain);
+      else if (!this.nextMeta && this.queue.length === 0 && !a.playing && remain < 0.5) { this.stop(); this.app.toast('Automix 已播完佇列'); }
+    } else if (this.phase === 'transition') {
+      if (eng.ctx.currentTime >= this.trans.end + 0.2) this.finishTransition();
+    }
+    this._emit();
+  }
+
+  /* 立即開始過渡(使用者按「下一首」);beats 縮短為 8 拍 */
+  skip() {
+    if (!this.running || this.phase !== 'playing' || !this.nextReady) return;
+    const a = this.deck(this.activeId), bpm = a.effectiveBpm() || 124;
+    this.beginTransition(8 * 60 / bpm, this.remainingSec());
+  }
+
+  beginTransition(D, remain) {
+    const eng = this.eng, ctx = eng.ctx, sr = ctx.sampleRate;
+    const out = this.deck(this.activeId), inn = this.deck(this.idleId());
+    const om = out.meta, im = inn.meta;
+    if (out.rep.loop.on) out.loopOff();
+
+    // 1) 新曲速度貼齊舊曲目前的有效 BPM(必要時倍速/半速),Key Lock 打開所以音高不變
+    const outBpm = out.effectiveBpm();
+    inn.setKeylock(true);
+    if (im.bpm && outBpm) inn.setTempoRatio(matchTempoRatio(im.bpm, outBpm, 0.16).ratio);
+    inn.seekSamples(Math.round((im.offset || 0) * sr));
+
+    // 2) 找出舊曲下一個小節線的 context frame(至少 0.35 秒後)
+    const minFrame = Math.round((ctx.currentTime + 0.35) * sr);
+    let F = minFrame;
+    const r = out.rep, rate = r.rate > 0.1 ? r.rate : out.tempoRatio;
+    if (om.bpm && out.playing) {
+      const barDur = 4 * 60 / om.bpm, off = om.offset || 0;
+      let k = Math.ceil((r.pos / sr - off) / barDur);
+      for (let n = 0; n < 8; n++, k++) {
+        const bpos = (off + k * barDur) * sr;
+        F = r.frame + (bpos - r.pos) / rate;
+        if (F >= minFrame) break;
+      }
+      F = Math.round(F);
+    }
+    const T0 = F / sr, tNow = ctx.currentTime;
+    // 3) 若舊曲快播完了,縮短過渡,確保在曲終前完成
+    const room = tNow + remain - T0 - 0.3;
+    if (room < D) D = Math.max(2, room);
+
+    inn.playAt(F);
+    eng.setCrossfader(this.activeId === 'A' ? -1 : 1, true);
+    this._automate(out, inn, T0, D);
+    this.trans = { start: T0, end: T0 + D, dur: D, from: this.activeId };
+    this.phase = 'transition';
+    this.app.toast('混音:' + (om.title || '') + ' → ' + (im.title || ''));
+    this._emit();
+  }
+
+  _automate(out, inn, T0, D) {
+    const eng = this.eng, now = eng.ctx.currentTime, n = 96;
+    const p0 = out.id === 'A' ? -1 : 1, p1 = -p0;
+    const cOut = new Float32Array(n), cIn = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = i / (n - 1), e = x * x * (3 - 2 * x);                 // smoothstep
+      const g = Engine.xfGains(p0 + (p1 - p0) * e);
+      const isA = out.id === 'A';
+      cOut[i] = isA ? g.a : g.b; cIn[i] = isA ? g.b : g.a;
+    }
+    const g0 = Engine.xfGains(p0), oG = out.xf.gain, iG = inn.xf.gain;
+    oG.cancelScheduledValues(now); iG.cancelScheduledValues(now);
+    oG.setValueAtTime(out.id === 'A' ? g0.a : g0.b, now); iG.setValueAtTime(out.id === 'A' ? g0.b : g0.a, now);
+    oG.setValueCurveAtTime(cOut, T0, D); iG.setValueCurveAtTime(cIn, T0, D);
+    eng.automated = true;
+
+    if (this.opts.bassSwap) {          // 前半段只聽舊曲低頻,中點快速交換,後半段只聽新曲低頻
+      const lo = -32, a0 = T0 + 0.42 * D, a1 = T0 + 0.58 * D;
+      inn.low.gain.cancelScheduledValues(now); inn.low.gain.setValueAtTime(lo, now);
+      inn.low.gain.setValueAtTime(lo, a0); inn.low.gain.linearRampToValueAtTime(0, a1);
+      out.low.gain.cancelScheduledValues(now); out.low.gain.setValueAtTime(0, now);
+      out.low.gain.setValueAtTime(0, a0); out.low.gain.linearRampToValueAtTime(lo, a1);
+    }
+    if (this.opts.wash) {              // 舊曲後半段逐漸被低通濾掉,像慢慢沉入水中
+      out.wash.frequency.cancelScheduledValues(now); out.wash.frequency.setValueAtTime(20000, now);
+      out.wash.frequency.setValueAtTime(20000, T0 + 0.5 * D);
+      out.wash.frequency.exponentialRampToValueAtTime(700, T0 + D);
+    }
+  }
+
+  crossfaderPos() {
+    if (this.phase !== 'transition' || !this.trans) return null;
+    const x = Math.max(0, Math.min(1, (this.eng.ctx.currentTime - this.trans.start) / this.trans.dur));
+    const e = x * x * (3 - 2 * x), p0 = this.trans.from === 'A' ? -1 : 1;
+    return p0 + (-2 * p0) * e;
+  }
+
+  finishTransition() {
+    const out = this.deck(this.activeId), inn = this.deck(this.idleId());
+    out.pause(); this._resetDeckFx(out); inn.low.gain.setValueAtTime(0, this.eng.ctx.currentTime);
+    this.activeId = inn.id; this.queue.shift(); this.current = inn.meta;
+    this.eng.xfPos = inn.id === 'A' ? -1 : 1; this.eng.automated = false;
+    this.phase = 'playing'; this.trans = null;
+    this._rampTempoBack(inn);
+    this._prepareNext(); this._emit();
+  }
+
+  /* 過渡後,新曲的速度在約 30 秒內慢慢回到原速,避免 BPM 一路被前一首拖著走 */
+  _rampTempoBack(deck) {
+    if (this.rampTimer) clearInterval(this.rampTimer);
+    const r0 = deck.tempoRatio; if (Math.abs(r0 - 1) < 0.002) return;
+    const t0 = performance.now(), dur = 30000; let expect = r0;
+    this.rampTimer = setInterval(() => {
+      if (!this.running || Math.abs(deck.tempoRatio - expect) > 0.0006) { clearInterval(this.rampTimer); return; }   // 使用者動了推桿就放手
+      const x = Math.min(1, (performance.now() - t0) / dur);
+      deck.setTempoRatio(r0 + (1 - r0) * x); expect = deck.tempoRatio;
+      if (x >= 1) clearInterval(this.rampTimer);
+    }, 400);
+  }
+
+  statusText() {
+    if (!this.running) return '';
+    if (this.phase === 'transition' && this.trans) {
+      const x = Math.max(0, Math.min(1, (this.eng.ctx.currentTime - this.trans.start) / this.trans.dur));
+      return x <= 0 ? '準備混入下一首…' : '混音中 ' + Math.round(x * 100) + '%';
+    }
+    return this.nextMeta ? (this.nextReady ? '下一首已就緒' : '載入下一首…') : '最後一首';
+  }
+}
+
+/* ============================================================================
+ * UI:推桿、Deck 面板(刷碟手勢、波形總覽、拍點 LED)、歌單/Automix、音源
+ * ========================================================================== */
+const $ = (s, r) => (r || document).querySelector(s);
+const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+function fmtTime(s) { if (!isFinite(s)) s = 0; s = Math.max(0, s); return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); }
+function keyColor(code) {
+  const n = parseInt(code, 10); if (!n) return '#6b6e79';
+  return 'hsl(' + ((n - 1) * 30 + 10) + ' 72% ' + (String(code).endsWith('B') ? '70%' : '62%') + ')';
+}
+let _toastTimer = null;
+function toast(msg, ms) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(_toastTimer); _toastTimer = setTimeout(() => t.classList.remove('show'), ms || 2600);
+}
+
+/* ---------- 推桿 ---------- */
+function bindFader(el, opt) {
+  // opt: { vertical, get(): 0..1, set(v, final), onDouble() }
+  const cap = $('.cap', el); let dragging = false, lastUp = 0, moved = false;
+  const place = (v) => {
+    if (opt.vertical) cap.style.top = 'calc(10px + (100% - 20px) * ' + (1 - v) + ')';
+    else cap.style.left = 'calc(24px + (100% - 48px) * ' + v + ')';
+  };
+  const fromEvent = (e) => {
+    const r = el.getBoundingClientRect();
+    return opt.vertical ? clamp(1 - (e.clientY - r.top - 10) / (r.height - 20), 0, 1) : clamp((e.clientX - r.left - 24) / (r.width - 48), 0, 1);
+  };
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); el.setPointerCapture(e.pointerId); dragging = true; moved = false;
+    const v = fromEvent(e); place(v); opt.set(v, false);
+  });
+  el.addEventListener('pointermove', (e) => { if (!dragging) return; moved = true; const v = fromEvent(e); place(v); opt.set(v, false); });
+  const end = (e) => {
+    if (!dragging) return; dragging = false;
+    const now = performance.now();
+    if (!moved && now - lastUp < 320 && opt.onDouble) { opt.onDouble(); lastUp = 0; return; }
+    lastUp = now; if (opt.final) opt.final();
+  };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+  return { place, get dragging() { return dragging; } };
+}
+
+/* ---------- Deck 介面 ---------- */
+function deckTemplate(id) {
+  const loopSz = [['¼', 0.25], ['½', 0.5], ['1', 1], ['2', 2], ['4', 4], ['8', 8]]
+    .map(([t, b]) => '<button class="btn sz" data-b="' + b + '">' + t + '</button>').join('');
+  const fx = [['filter', 'Filter'], ['echo', 'Echo'], ['reverb', 'Reverb'], ['flanger', 'Flanger'], ['crush', 'Crush']]
+    .map(([k, t]) => '<button class="btn" data-fx="' + k + '">' + t + '</button>').join('');
+  return '' +
+    '<div class="info"><div class="trk"><div class="t" data-k="title">尚未載入曲目</div><div class="s" data-k="sub">Deck ' + id + ' · 到「歌單」載入</div></div>' +
+    '<div class="key" data-k="key">–</div><div class="bpm"><b data-k="bpm">--.-</b><i data-k="pct">0.0%</i></div></div>' +
+    '<div class="wave" data-k="wave"><canvas></canvas><span class="tm l" data-k="tel">0:00</span><span class="tm" data-k="trm">-0:00</span></div>' +
+    '<div class="fader tempo" data-k="tempo"><div class="rail"></div><div class="ticks"></div><div class="mid"></div><div class="cap"></div></div>' +
+    '<div class="platcell" data-k="platcell"><div class="platter" data-k="platter"><div class="disc" data-k="disc"><div class="lab"></div></div>' +
+    '<div class="leds" data-k="leds"><i></i><i></i><i></i><i></i></div></div><div class="nofile" data-k="nofile">尚未載入曲目</div></div>' +
+    '<div class="fader vol" data-k="vol"><div class="rail"></div><div class="ticks"></div><div class="meter"><i data-k="vu"></i></div><div class="cap"></div></div>' +
+    '<div class="ctl"><button class="btn" data-k="cue">Cue</button><button class="btn play" data-k="play">▶</button>' +
+    '<button class="btn" data-k="sync">Sync</button><button class="btn on" data-k="keylock">Key</button></div>' +
+    '<div class="pads row-loop"><button class="btn lp" data-k="loop">Loop</button>' + loopSz + '<button class="btn bankbtn" data-k="bank1">FX</button></div>' +
+    '<div class="pads row-fx">' + fx + '<button class="btn bankbtn" data-k="bank2">Loop</button></div>';
+}
+
+class DeckUI {
+  constructor(app, deck, root) {
+    this.app = app; this.deck = deck; this.root = root;
+    root.innerHTML = deckTemplate(deck.id); root.classList.add('bank-loop');
+    const q = (k) => $('[data-k="' + k + '"]', root);
+    this.el = {}; ['title', 'sub', 'key', 'bpm', 'pct', 'wave', 'tel', 'trm', 'tempo', 'platcell', 'platter', 'disc', 'leds', 'nofile', 'vol', 'vu', 'cue', 'play', 'sync', 'keylock', 'loop', 'bank1', 'bank2']
+      .forEach(k => this.el[k] = q(k));
+    this.canvas = $('canvas', this.el.wave); this.g = this.canvas.getContext('2d');
+    this.cache = null; this.cacheKey = ''; this.last = {};
+    this._bindTransport(); this._bindFaders(); this._bindPlatter(); this._bindWave(); this._sizeObserver();
+    deck.onchange = (what) => { if (what === 'load') this.cacheKey = ''; this.refresh(); };
+    this.refresh();
+  }
+
+  _set(k, v, fn) { if (this.last[k] !== v) { this.last[k] = v; fn(v); } }
+
+  _bindTransport() {
+    const d = this.deck, e = this.el, root = this.root, other = () => this.app.engine.decks[d.id === 'A' ? 'B' : 'A'];
+    e.play.addEventListener('click', () => { if (d.loaded) d.togglePlay(); else toast('先到「歌單」載入一首曲子'); });
+    e.cue.addEventListener('click', () => d.cueButton());
+    e.sync.addEventListener('click', () => { if (!d.syncTo(other())) toast('Sync 需要兩軌都載入且已有 BPM'); });
+    e.keylock.addEventListener('click', () => d.setKeylock(!d.keylock));
+    e.loop.addEventListener('click', () => { if (d.loaded) d.toggleLoop(); });
+    $$('.sz', root).forEach(b => b.addEventListener('click', () => d.setLoopBeats(parseFloat(b.dataset.b))));
+    $$('[data-fx]', root).forEach(b => b.addEventListener('click', () => d.setFx(b.dataset.fx, !d.fx[b.dataset.fx])));
+    e.bank1.addEventListener('click', () => { root.classList.remove('bank-loop'); root.classList.add('bank-fx'); });
+    e.bank2.addEventListener('click', () => { root.classList.remove('bank-fx'); root.classList.add('bank-loop'); });
+  }
+
+  _bindFaders() {
+    const d = this.deck;
+    const tempoToV = () => clamp(0.5 + (d.tempoRatio - 1) / (2 * d.tempoRange), 0, 1);
+    this.tempoFader = bindFader(this.el.tempo, {
+      vertical: true,
+      set: (v) => { if (this.app.automix.running) this.app.automix.rampTimer && clearInterval(this.app.automix.rampTimer);
+        if (Math.abs(v - 0.5) < 0.018) v = 0.5;
+        d.setTempoRatio(1 + (v - 0.5) * 2 * d.tempoRange); },
+      onDouble: () => { d.setTempoRatio(1); this.tempoFader.place(0.5); },
+    });
+    this.volFader = bindFader(this.el.vol, { vertical: true, set: (v) => d.setVolume(v) });
+    this._tempoToV = tempoToV;
+    this.volFader.place(d.volume); this.tempoFader.place(0.5);
+  }
+
+  /* 刷碟:手指按住轉盤 = 播放頭停住;順時針/逆時針滑動 = 依角速度映射成播放速率(負值=倒轉) */
+  _bindPlatter() {
+    const d = this.deck, pl = this.el.platter, self = this;
+    let active = false, center = null, lastAng = 0, lastT = 0, lastMove = 0, target = 0, sent = 0;
+    const ANG_PER_SEC_AT_1X = 2 * Math.PI / 1.8;      // 33⅓ 轉/分:一圈 1.8 秒
+    pl.addEventListener('pointerdown', (e) => {
+      if (!d.loaded) return;
+      e.preventDefault(); pl.setPointerCapture(e.pointerId);
+      const r = pl.getBoundingClientRect(); center = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      lastAng = Math.atan2(e.clientY - center.y, e.clientX - center.x); lastT = e.timeStamp; lastMove = performance.now();
+      target = 0; sent = 0; active = true; pl.classList.add('touch');
+      d.scratchStart();
+    });
+    pl.addEventListener('pointermove', (e) => {
+      if (!active) return;
+      const ang = Math.atan2(e.clientY - center.y, e.clientX - center.x);
+      let da = ang - lastAng; if (da > Math.PI) da -= 2 * Math.PI; if (da < -Math.PI) da += 2 * Math.PI;
+      const dt = Math.max(4, e.timeStamp - lastT) / 1000;
+      target = 0.55 * target + 0.45 * ((da / dt) / ANG_PER_SEC_AT_1X);
+      lastAng = ang; lastT = e.timeStamp; lastMove = performance.now();
+    });
+    const end = () => { if (!active) return; active = false; pl.classList.remove('touch'); d.scratchEnd(); };
+    pl.addEventListener('pointerup', end); pl.addEventListener('pointercancel', end);
+    // 每個畫面更新送一次速率;手指停住(超過 60ms 沒有移動事件)就把速率拉回 0
+    this.scratchTick = () => {
+      if (!active) return;
+      if (performance.now() - lastMove > 60) target = 0;
+      if (Math.abs(target - sent) > 0.004) { sent = target; d.scratchMove(target); }
+    };
+  }
+
+  _bindWave() {
+    const w = this.el.wave, d = this.deck; let drag = false;
+    const seek = (e) => { if (!d.loaded) return; const r = w.getBoundingClientRect(); d.seekSamples(clamp((e.clientX - r.left) / r.width, 0, 1) * d.N); };
+    w.addEventListener('pointerdown', (e) => { drag = true; w.setPointerCapture(e.pointerId); seek(e); });
+    w.addEventListener('pointermove', (e) => { if (drag) seek(e); });
+    w.addEventListener('pointerup', () => drag = false); w.addEventListener('pointercancel', () => drag = false);
+  }
+
+  _sizeObserver() {
+    const upd = () => { const r = this.el.platcell.getBoundingClientRect(); this.el.platter.style.setProperty('--p', Math.max(70, Math.floor(Math.min(r.width, r.height - 8) - 6)) + 'px'); };
+    if (window.ResizeObserver) new ResizeObserver(upd).observe(this.el.platcell); else window.addEventListener('resize', upd);
+    upd();
+  }
+
+  refresh() {
+    const d = this.deck, e = this.el, m = d.meta;
+    e.title.textContent = d.loading ? '載入中…' : (m ? m.title : '尚未載入曲目');
+    e.sub.textContent = d.loading ? '解碼音訊' : (m ? (m.artist || 'Deck ' + d.id) + (m.bpm ? '' : ' · 尚無 BPM') : 'Deck ' + d.id + ' · 到「歌單」載入');
+    e.key.textContent = (m && m.key) || '–'; e.key.style.background = m && m.key ? keyColor(m.key) : ''; e.key.style.color = m && m.key ? '#17181c' : '';
+    const bpm = d.effectiveBpm();
+    e.bpm.textContent = bpm ? bpm.toFixed(1) : '--.-';
+    const pct = (d.tempoRatio - 1) * 100; e.pct.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+    e.play.textContent = d.playing ? '❚❚' : '▶'; e.play.classList.toggle('on', d.playing);
+    e.keylock.classList.toggle('on', d.keylock); e.loop.classList.toggle('on', !!d.rep.loop.on);
+    $$('.sz', this.root).forEach(b => b.classList.toggle('on', parseFloat(b.dataset.b) === d.loopBeats));
+    $$('[data-fx]', this.root).forEach(b => b.classList.toggle('on', !!d.fx[b.dataset.fx]));
+    e.nofile.style.display = d.loaded ? 'none' : ''; e.disc.style.opacity = d.loaded ? 1 : .45;
+    if (!this.tempoFader.dragging) this.tempoFader.place(this._tempoToV());
+  }
+
+  _buildCache(w, h, dpr) {
+    const d = this.deck, pk = d.peaks; if (!pk) { this.cache = null; return; }
+    const mk = (color) => {
+      const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d');
+      g.fillStyle = color; const cols = pk.length / 2, mid = h / 2;
+      for (let x = 0; x < w; x++) {
+        const i = Math.min(cols - 1, Math.floor(x / w * cols)), a = pk[i * 2], b = pk[i * 2 + 1];
+        g.fillRect(x, mid - b * mid * 1.9, 1, Math.max(1, (b - a) * mid * 1.9));
+      }
+      return c;
+    };
+    const acc = getComputedStyle(this.root).getPropertyValue('--acc').trim() || '#ffb547';
+    this.cache = { dim: mk('rgba(200,204,214,.42)'), lit: mk(acc), w, h };
+    // 小節線
+    if (d.meta && d.meta.bpm) {
+      const g = this.cache.dim.getContext('2d'), sr = d.ctx.sampleRate, bar = 4 * 60 / d.meta.bpm * sr, off = (d.meta.offset || 0) * sr;
+      g.fillStyle = 'rgba(255,255,255,.16)';
+      for (let p = off; p < d.N; p += bar) g.fillRect(Math.round(p / d.N * w), h - 5 * dpr, Math.max(1, dpr), 5 * dpr);
+    }
+  }
+
+  frame() {
+    const d = this.deck; this.scratchTick && this.scratchTick();
+    if (!d.loaded) { this._set('vu0', 0, () => this.el.vu.style.height = '0%'); return; }
+    const pos = d.getPosSec(), dur = d.duration();
+    this.el.disc.style.transform = 'rotate(' + ((pos / 1.8 * 360) % 360).toFixed(2) + 'deg)';
+    this._set('tel', fmtTime(pos), v => this.el.tel.textContent = v);
+    this._set('trm', '-' + fmtTime((dur - pos) / Math.max(.5, d.tempoRatio)), v => this.el.trm.textContent = v);
+
+    const bs = d.beatState();
+    if (bs) {
+      const on = d.playing ? bs.n : -1, flash = bs.phase < 0.18;
+      this._set('led', on + ':' + flash, () => $$('i', this.el.leds).forEach((el, i) => { el.classList.toggle('on', i === on); el.classList.toggle('dn', i === on && bs.n === 0 && flash); }));
+    }
+    const lv = clamp(d.level() * 1.4, 0, 1);
+    this.vuSm = Math.max(lv, (this.vuSm || 0) - 0.04);
+    this.el.vu.style.height = (this.vuSm * 100).toFixed(0) + '%';
+
+    // 波形
+    const dpr = Math.min(2, window.devicePixelRatio || 1), cw = this.el.wave.clientWidth, ch = this.el.wave.clientHeight;
+    if (!cw) return;
+    const W = Math.floor(cw * dpr), H = Math.floor(ch * dpr);
+    if (this.canvas.width !== W || this.canvas.height !== H) { this.canvas.width = W; this.canvas.height = H; this.cacheKey = ''; }
+    if (this.cacheKey !== W + 'x' + H + ':' + (d.meta && d.meta.id)) { this._buildCache(W, H, dpr); this.cacheKey = W + 'x' + H + ':' + (d.meta && d.meta.id); }
+    if (!this.cache) return;
+    const g = this.g, x = Math.round(pos / dur * W);
+    g.clearRect(0, 0, W, H); g.drawImage(this.cache.dim, 0, 0);
+    if (x > 0) g.drawImage(this.cache.lit, 0, 0, x, H, 0, 0, x, H);
+    const lp = d.rep.loop;
+    if (lp.on) { g.fillStyle = 'rgba(125,220,152,.28)'; g.fillRect(lp.a / d.N * W, 0, (lp.b - lp.a) / d.N * W, H); }
+    g.fillStyle = '#7ddc98'; g.fillRect(Math.round(d.cue / d.N * W), 0, Math.max(1, dpr), H);
+    g.fillStyle = '#fff'; g.fillRect(x - dpr, 0, 2 * dpr, H);
+  }
+}
+
+/* ---------- Crossfader ---------- */
+class CrossfaderUI {
+  constructor(app) {
+    this.app = app; this.el = $('#xf'); this.fader = bindFader(this.el, {
+      vertical: false,
+      set: (v) => {
+        if (this.app.automix.running) { this.app.automix.stop(); toast('手動推 Crossfader,Automix 已停止'); }
+        let p = v * 2 - 1; if (Math.abs(p) < 0.04) p = 0;
+        this.app.engine.setCrossfader(p);
+      },
+      onDouble: () => { this.app.engine.setCrossfader(0); this.fader.place(0.5); },
+    });
+    this.fader.place(0.5 + this.app.engine.xfPos / 2);
+  }
+  frame() {
+    const am = this.app.automix, p = am.crossfaderPos();
+    this.el.classList.toggle('auto', am.running && am.phase === 'transition');
+    if (this.fader.dragging) return;
+    const pos = p == null ? this.app.engine.xfPos : p;
+    this.fader.place(0.5 + pos / 2);
+  }
+}
+
+/* ---------- 歌單 + Automix ---------- */
+class LibraryUI {
+  constructor(app, root) {
+    this.app = app; this.root = root; this.expanded = null;
+    root.addEventListener('click', (e) => this.onClick(e));
+    root.addEventListener('change', (e) => this.onChange(e));
+    app.automix.onchange = () => { this.renderAutomixStatus(); };
+    this.render();
+  }
+  metaOf(id) { return this.app.library.find(t => t.id === id); }
+
+  render() {
+    const app = this.app, am = app.automix, lib = app.library;
+    const q = app.queue.map(id => this.metaOf(id)).filter(Boolean);
+    let qhtml = '';
+    if (!q.length) qhtml = '<div class="empty">佇列是空的。到下方曲庫按「＋」加入,或按「全部加入」。</div>';
+    else qhtml = '<div class="list">' + q.map((t, i) => {
+      let c = '';
+      if (i > 0) {
+        const s = compatibilityScore(q[i - 1].key, t.key), m = matchTempoRatio(t.bpm || 1, q[i - 1].bpm || 1, 0.16);
+        const cls = s <= 1 ? 'good' : s === 2 ? 'mid' : 'bad', lab = s === 0 ? '同調' : s === 1 ? '相容' : s === 2 ? '可接' : s === 99 ? '未分析' : '調性衝突';
+        c = '<div class="compat ' + cls + '">↓ ' + lab + (m.exact ? '' : ' · BPM 差太多') + '</div>';
+      }
+      return c + '<div class="row"><div class="num">' + (i + 1) + '</div><div class="kb" style="background:' + keyColor(t.key) + '">' + esc(t.key || '–') + '</div>' +
+        '<div class="meta"><b>' + esc(t.title) + '</b><span>' + (t.bpm ? t.bpm.toFixed(0) + ' BPM' : '未分析') + ' · ' + fmtTime(t.duration) + '</span></div>' +
+        '<div class="go"><button data-act="qup" data-id="' + t.id + '">↑</button><button data-act="qdown" data-id="' + t.id + '">↓</button><button data-act="qdel" data-id="' + t.id + '">×</button></div></div>';
+    }).join('') + '</div>';
+
+    let lhtml = '';
+    if (!lib.length) lhtml = '<div class="empty">曲庫是空的。匯入你的音檔,或先產生示範曲試玩。</div>';
+    else lhtml = '<div class="list">' + lib.map(t => {
+      const inQ = app.queue.indexOf(t.id) >= 0, open = this.expanded === t.id;
+      return '<div class="row"><div class="kb" style="background:' + keyColor(t.key) + '">' + esc(t.key || '–') + '</div>' +
+        '<div class="meta"><b>' + esc(t.title) + '</b><span>' + (t.bpm ? t.bpm.toFixed(1).replace(/\.0$/, '') + ' BPM' : '未分析') + ' · ' + fmtTime(t.duration) + (t.artist ? ' · ' + esc(t.artist) : '') + '</span></div>' +
+        '<div class="go"><button class="a" data-act="load" data-d="A" data-id="' + t.id + '">A</button><button class="b" data-act="load" data-d="B" data-id="' + t.id + '">B</button>' +
+        '<button class="' + (inQ ? 'on' : '') + '" data-act="queue" data-id="' + t.id + '">' + (inQ ? '✓' : '＋') + '</button><button data-act="more" data-id="' + t.id + '">⋯</button></div></div>' +
+        (open ? '<div class="row" style="justify-content:flex-end"><button class="abtn" data-act="edit" data-id="' + t.id + '">修正 BPM / 調性</button><button class="abtn stop" data-act="del" data-id="' + t.id + '">刪除</button></div>' : '');
+    }).join('') + '</div>';
+
+    const sc0 = $('.scroll', this.root), st = sc0 ? sc0.scrollTop : 0;
+    this._amKey = null;
+    this.root.innerHTML = '<div class="scroll">' +
+      '<div class="card"><h3>Automix</h3>' +
+      '<p>依調性(Camelot)與 BPM 排好順序,自動對拍、Bass Swap、等功率漸變。</p><div id="amStatus"></div>' +
+      '<div class="actions"><button class="abtn" data-act="sort">依調性與 BPM 排序</button><button class="abtn" data-act="qclear">清空佇列</button></div>' +
+      '<div class="opts"><label>過渡長度 <select data-opt="beats"><option value="8">8 拍</option><option value="16">16 拍</option><option value="32">32 拍</option></select></label>' +
+      '<label><input type="checkbox" data-opt="bassSwap"> Bass Swap</label><label><input type="checkbox" data-opt="wash"> 收尾低通</label></div>' +
+      '<div style="margin-top:10px">' + qhtml + '</div></div>' +
+      '<div class="card"><h3>曲庫 <span style="color:var(--dim);font-weight:400">' + lib.length + ' 首</span></h3>' +
+      '<div class="actions"><button class="abtn primary" data-act="import">匯入音檔</button><button class="abtn" data-act="demo">產生示範曲</button><button class="abtn" data-act="qall">全部加入佇列</button></div>' +
+      '<p class="hint">' + (Store.persistent ? '曲庫存在這台裝置的瀏覽器儲存空間,不會上傳到任何地方。' : '目前無法使用永久儲存(可能是無痕模式),關閉頁面後曲庫會消失。') + '</p>' +
+      '<div style="margin-top:8px">' + lhtml + '</div></div></div>';
+    const sel = $('[data-opt=beats]', this.root); if (sel) sel.value = String(am.opts.beats);
+    const bs = $('[data-opt=bassSwap]', this.root); if (bs) bs.checked = am.opts.bassSwap;
+    const wa = $('[data-opt=wash]', this.root); if (wa) wa.checked = am.opts.wash;
+    this.renderAutomixStatus();
+    const sc1 = $('.scroll', this.root); if (sc1) sc1.scrollTop = st;
+  }
+
+  renderAutomixStatus() {
+    const box = $('#amStatus', this.root); if (!box) return;
+    const am = this.app.automix, cur = am.current, nxt = am.nextMeta;
+    // 結構只在「狀態種類/曲目」改變時重建;進度文字用 textContent 更新,避免按鈕在點擊途中被換掉
+    const key = am.running ? 'run:' + (cur && cur.id) + ':' + (nxt && nxt.id) : 'idle:' + this.app.queue.length;
+    if (key !== this._amKey) {
+      this._amKey = key;
+      if (!am.running) {
+        const n = this.app.queue.length;
+        box.innerHTML = '<div class="actions"><button class="abtn go" data-act="amstart"' + (n ? '' : ' disabled') + '>開始 Automix(' + n + ' 首)</button></div>';
+      } else {
+        box.innerHTML = '<div class="now"><span class="dot"></span><div style="min-width:0"><b>' + esc(cur ? cur.title : '') + '</b>' +
+          '<div style="color:var(--dim);font-size:12px"><span id="amText"></span>' + (nxt ? ' · 下一首:' + esc(nxt.title) : '') + '</div></div></div>' +
+          '<div class="actions"><button class="abtn" data-act="amskip">下一首</button><button class="abtn stop" data-act="amstop">停止 Automix</button></div>';
+      }
+    }
+    const t = $('#amText', box); if (t) t.textContent = am.statusText();
+  }
+
+  onChange(e) {
+    const o = e.target.dataset.opt, am = this.app.automix; if (!o) return;
+    if (o === 'beats') am.opts.beats = parseInt(e.target.value, 10); else am.opts[o] = e.target.checked;
+    this.app.saveSettings();
+  }
+
+  async onClick(e) {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const act = b.dataset.act, id = b.dataset.id, app = this.app;
+    try {
+      if (act === 'import') $('#fileInput').click();
+      else if (act === 'demo') await app.addDemos(b);
+      else if (act === 'load') await app.loadToDeckUser(b.dataset.d, this.metaOf(id));
+      else if (act === 'queue') { const i = app.queue.indexOf(id); if (i >= 0) app.queue.splice(i, 1); else app.queue.push(id); this.render(); }
+      else if (act === 'qall') { app.queue = app.library.map(t => t.id); this.render(); }
+      else if (act === 'qclear') { app.queue = []; this.render(); }
+      else if (act === 'qdel') { app.queue = app.queue.filter(x => x !== id); this.render(); }
+      else if (act === 'qup' || act === 'qdown') {
+        const i = app.queue.indexOf(id), j = act === 'qup' ? i - 1 : i + 1;
+        if (i >= 0 && j >= 0 && j < app.queue.length) { [app.queue[i], app.queue[j]] = [app.queue[j], app.queue[i]]; this.render(); }
+      }
+      else if (act === 'sort') {
+        const items = (app.queue.length ? app.queue : app.library.map(t => t.id)).map(x => this.metaOf(x)).filter(Boolean);
+        app.queue = sortByHarmony(items).map(t => t.id); this.render(); toast('已依調性與 BPM 排序');
+      }
+      else if (act === 'more') { this.expanded = this.expanded === id ? null : id; this.render(); }
+      else if (act === 'edit') await app.editMeta(id);
+      else if (act === 'del') { await app.deleteTrack(id); this.expanded = null; }
+      else if (act === 'amstart') await app.startAutomix();
+      else if (act === 'amstop') { app.automix.stop(); this.render(); }
+      else if (act === 'amskip') app.automix.skip();
+    } catch (err) { toast('發生錯誤:' + (err && err.message || err), 4000); console.error(err); }
+  }
+}
+
+/* ---------- 音源 ---------- */
+class SourcesUI {
+  constructor(app, root) {
+    this.app = app; this.root = root; this.dbxPath = ''; this.dbxEntries = null;
+    root.addEventListener('click', (e) => this.onClick(e));
+    this.render();
+  }
+  render() {
+    const app = this.app, dbx = app.providers.dropbox;
+    const entries = this.dbxEntries ? '<div class="list" style="margin-top:8px">' + (this.dbxPath ? '<div class="row"><div class="meta"><b>⬑ 上一層</b></div><div class="go"><button data-act="dbxup">回上層</button></div></div>' : '') +
+      this.dbxEntries.map((en, i) => en['.tag'] === 'folder'
+        ? '<div class="row"><div class="meta"><b>📁 ' + esc(en.name) + '</b></div><div class="go"><button data-act="dbxopen" data-i="' + i + '">開啟</button></div></div>'
+        : '<div class="row"><div class="meta"><b>' + esc(en.name) + '</b><span>' + (en.size / 1048576).toFixed(1) + ' MB</span></div><div class="go"><button data-act="dbxadd" data-i="' + i + '">加入</button></div></div>').join('') + '</div>' : '';
+    this.root.innerHTML = '<div class="scroll">' +
+      '<div class="card"><h3>從網址載入</h3><p>貼上音檔網址(mp3 / m4a / wav)。檔案所在的伺服器必須允許跨網域(CORS);放在同一個 GitHub Pages 專案裡的檔案一定可以。</p>' +
+      '<input class="wide" type="url" id="urlIn" placeholder="https://…/track.mp3" autocapitalize="off" autocorrect="off"><div class="actions"><button class="abtn primary" data-act="url">下載並加入曲庫</button></div></div>' +
+      '<div class="card"><h3>Dropbox</h3><p>用 Dropbox API 讀取你自己的檔案,下載後存進本機曲庫。</p>' +
+      '<input class="wide" type="password" id="dbxToken" placeholder="Access Token" value="' + esc(dbx.token) + '" autocapitalize="off">' +
+      '<div class="actions"><button class="abtn" data-act="dbxsave">儲存並列出檔案</button><button class="abtn" data-act="dbxout">登出</button></div>' +
+      '<p class="hint">Token 可在 Dropbox App Console 你自己的 App 頁面按 Generate 取得。這個轉接器尚未用真實帳號完整驗證。</p>' + entries + '</div>' +
+      '<div class="card"><h3>SoundCloud、Tidal、Apple Music</h3>' + UNAVAILABLE_PROVIDERS.map(p => '<p><b style="color:var(--ink)">' + p.name + '</b>:' + p.why + '</p>').join('') +
+      '<p class="hint">替代做法:匯入你合法擁有的音檔(買斷的 mp3 / wav、Bandcamp 下載檔等)。</p></div>' +
+      '<div class="card"><h3>設定</h3><div class="opts"><label>速度推桿範圍 <select id="rangeSel"><option value="0.08">±8%</option><option value="0.16">±16%</option><option value="0.5">±50%</option></select></label></div>' +
+      '<p class="hint" id="usage"></p></div></div>';
+    const sel = $('#rangeSel', this.root); sel.value = String(app.engine.ready ? app.engine.decks.A.tempoRange : app.settings.range || 0.16);
+    sel.onchange = () => { app.setTempoRange(parseFloat(sel.value)); };
+    Store.usage().then(u => { const el = $('#usage', this.root); if (el && u && u.quota) el.textContent = '儲存空間:已用 ' + (u.usage / 1048576).toFixed(0) + ' MB / 可用約 ' + (u.quota / 1048576).toFixed(0) + ' MB'; });
+  }
+  async onClick(e) {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const act = b.dataset.act, app = this.app, dbx = app.providers.dropbox;
+    try {
+      if (act === 'url') {
+        const url = $('#urlIn', this.root).value.trim(); if (!url) return toast('請先貼上網址');
+        await app.addFromUrl(url);
+      } else if (act === 'dbxsave' || act === 'dbxopen' || act === 'dbxup') {
+        if (act === 'dbxsave') dbx.token = $('#dbxToken', this.root).value.trim();
+        if (act === 'dbxopen') this.dbxPath = this.dbxEntries[+b.dataset.i].path_lower;
+        if (act === 'dbxup') this.dbxPath = this.dbxPath.split('/').slice(0, -1).join('/');
+        if (!dbx.token) return toast('請先貼上 Access Token');
+        this.dbxEntries = await dbx.list(this.dbxPath); this.render();
+      } else if (act === 'dbxadd') {
+        await app.addFromDropbox(this.dbxEntries[+b.dataset.i]);
+      } else if (act === 'dbxout') { dbx.token = ''; this.dbxEntries = null; this.render(); }
+    } catch (err) { toast('失敗:' + (err && err.message || err), 4500); console.error(err); }
+  }
+}
+
+/* ============================================================================
+ * App:把 Store / Engine / Automix / UI 串在一起
+ * ========================================================================== */
+const App = {
+  engine: new Engine(), library: [], queue: [], settings: {}, decksUI: {}, providers: {},
+  tab: 'mixer', toast,
+
+  async init() {
+    try { this.settings = JSON.parse(localStorage.getItem('djm_settings') || '{}'); } catch (e) { this.settings = {}; }
+    this.providers = { local: new LocalFileProvider(), url: new UrlProvider(), dropbox: new DropboxProvider() };
+    await Store.open();
+    this.library = (await Store.listMeta()).sort((a, b) => a.added - b.added);
+    this.automix = new Automix(this);
+    Object.assign(this.automix.opts, { beats: this.settings.beats || 16, bassSwap: this.settings.bassSwap !== false, wash: this.settings.wash !== false });
+
+    this.libraryUI = new LibraryUI(this, $('#tab-library'));
+    this.sourcesUI = new SourcesUI(this, $('#tab-sources'));
+    $$('.tabs button').forEach(b => b.addEventListener('click', () => this.showTab(b.dataset.tab)));
+    $('#startBtn').addEventListener('click', () => this.start());
+    $('#fileInput').addEventListener('change', (e) => { const f = e.target.files; if (f && f.length) this.importFiles(f); e.target.value = ''; });
+
+    document.addEventListener('gesturestart', (e) => e.preventDefault());
+    document.addEventListener('touchmove', (e) => { if (!e.target.closest || !e.target.closest('.scroll')) e.preventDefault(); }, { passive: false });
+    document.addEventListener('pointerdown', () => this.engine.resume(), { passive: true });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) this.engine.resume(); });
+
+    try { if (await this.providers.dropbox.finishOAuth()) { toast('Dropbox 已連線'); this.showTab('sources'); } } catch (e) { toast(e.message); }
+    if ('serviceWorker' in navigator && /^https?:/.test(location.protocol)) navigator.serviceWorker.register('sw.js').catch(() => {});
+    requestAnimationFrame(this._loop);
+  },
+
+  workletURL() { return URL.createObjectURL(new Blob([$('#worklet-src').textContent], { type: 'text/javascript' })); },
+
+  async start() {
+    const btn = $('#startBtn'), msg = $('#startMsg'); btn.disabled = true; msg.textContent = '';
+    try { await this.engine.init(this.workletURL()); }
+    catch (e) { msg.textContent = '無法啟動音訊引擎:' + (e && e.message || e); btn.disabled = false; console.error(e); return; }
+    this.engine.decks.A.setTempoRange(this.settings.range || 0.16); this.engine.decks.B.setTempoRange(this.settings.range || 0.16);
+    this.decksUI.A = new DeckUI(this, this.engine.decks.A, $('#deckA'));
+    this.decksUI.B = new DeckUI(this, this.engine.decks.B, $('#deckB'));
+    this.xfUI = new CrossfaderUI(this);
+    this.sourcesUI.render();
+    $('#start').classList.add('hide');
+    if (!this.library.length) toast('到「歌單」按「產生示範曲」就能立刻試玩', 4200);
+  },
+
+  showTab(t) {
+    this.tab = t;
+    $$('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === t));
+    $$('.tab').forEach(s => s.classList.toggle('on', s.id === 'tab-' + t));
+    if (t === 'library') this.libraryUI.render();
+    if (t === 'sources') this.sourcesUI.render();
+  },
+
+  /* ----- 曲庫 ----- */
+  meta(id) { return this.library.find(t => t.id === id); },
+  refreshLibrary() { this.libraryUI.render(); },
+
+  async importBlobs(items) {
+    let ok = 0;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      toast('分析中 (' + (i + 1) + '/' + items.length + '):' + it.title, 60000);
+      try {
+        const meta = await Importer.importBlob(this.engine, it.blob, it);
+        this.library.push(meta); ok++;
+      } catch (e) { toast('無法讀取「' + it.title + '」:' + (e && e.message || '不支援的格式'), 4500); await new Promise(r => setTimeout(r, 1200)); }
+    }
+    this.refreshLibrary();
+    if (ok) toast('已加入 ' + ok + ' 首到曲庫');
+    return ok;
+  },
+  async importFiles(files) { await this.importBlobs(this.providers.local.items(files)); },
+
+  async addDemos() {
+    if (!this.engine.ready) return toast('請先按「開始混音」');
+    const have = new Set(this.library.map(t => t.title)), items = [];
+    for (let i = 0; i < DEMO_TRACKS.length; i++) {
+      const d = DEMO_TRACKS[i]; if (have.has(d.title)) continue;
+      toast('合成示範曲 (' + (i + 1) + '/' + DEMO_TRACKS.length + ')…', 60000);
+      await new Promise(r => setTimeout(r, 30));
+      const x = synthDemoTrack({ bpm: d.bpm, root: d.root, minor: d.minor, bars: 24, sr: 32000, seed: d.seed });
+      items.push({ title: d.title, artist: d.artist, source: 'demo', blob: new Blob([encodeWav16(x, 32000)], { type: 'audio/wav' }) });
+    }
+    if (items.length) await this.importBlobs(items);
+    this.queue = sortByHarmony(this.library.filter(t => t.source === 'demo')).map(t => t.id);
+    this.refreshLibrary();
+    toast('示範曲已依調性排好,可以開始 Automix 了');
+  },
+
+  async addFromUrl(url) {
+    toast('下載中…', 60000);
+    const blob = await this.providers.url.fetchBlob(url, (p) => toast('下載中 ' + Math.round(p * 100) + '%', 60000));
+    await this.importBlobs([{ title: this.providers.url.titleFromUrl(url), blob, source: 'url' }]);
+  },
+  async addFromDropbox(entry) {
+    toast('從 Dropbox 下載:' + entry.name, 60000);
+    const blob = await this.providers.dropbox.fetchBlob(entry);
+    await this.importBlobs([{ title: titleFromName(entry.name), blob, source: 'dropbox' }]);
+  },
+
+  async editMeta(id) {
+    const t = this.meta(id); if (!t) return;
+    const bpm = prompt('BPM(60–200)', t.bpm ? t.bpm.toFixed(1) : '');
+    if (bpm === null) return;
+    const key = prompt('調性(Camelot,例如 8A、9B)', t.key || '');
+    if (key === null) return;
+    const b = parseFloat(bpm), k = key.trim().toUpperCase();
+    if (bpm.trim() && (!(b >= 60 && b <= 200))) return toast('BPM 需要在 60 到 200 之間');
+    if (k && !/^(1[0-2]|[1-9])[AB]$/.test(k)) return toast('調性格式像 8A 或 9B');
+    if (bpm.trim()) t.bpm = b; if (k) t.key = k;
+    await Store.putMeta(t);
+    for (const d of Object.values(this.engine.decks)) if (d.meta && d.meta.id === t.id) d._emit('load');
+    this.refreshLibrary(); toast('已更新');
+  },
+
+  async deleteTrack(id) {
+    const t = this.meta(id); if (!t || !confirm('從曲庫刪除「' + t.title + '」?')) return;
+    await Store.remove(id);
+    this.library = this.library.filter(x => x.id !== id); this.queue = this.queue.filter(x => x !== id);
+    this.refreshLibrary();
+  },
+
+  /* ----- 載入到 Deck ----- */
+  async loadToDeck(id, meta) {
+    const deck = this.engine.decks[id]; deck.loading = true; deck._emit('state');
+    if (deck.playing) deck.pause();
+    try {
+      const blob = await Store.getBlob(meta.id);
+      if (!blob) throw new Error('找不到音檔');
+      const buf = await this.engine.decode(await blob.arrayBuffer());
+      deck.loadAudio(buf, meta);
+    } finally { deck.loading = false; deck._emit('state'); }
+  },
+  async loadToDeckUser(id, meta) {
+    if (!meta) return;
+    if (this.automix.running) return toast('Automix 進行中,請先停止再手動載入');
+    toast('載入到 Deck ' + id + '…', 30000);
+    await this.loadToDeck(id, meta);
+    toast('Deck ' + id + ':' + meta.title); this.showTab('mixer');
+  },
+
+  async startAutomix() {
+    const items = this.queue.map(id => this.meta(id)).filter(Boolean);
+    if (!items.length) return toast('佇列是空的');
+    this.showTab('mixer');
+    toast('Automix 啟動', 2000);
+    await this.automix.start(items);
+    this.libraryUI.render();
+  },
+
+  setTempoRange(r) { this.settings.range = r; this.saveSettings(); for (const d of Object.values(this.engine.decks)) d.setTempoRange(r); },
+  saveSettings() {
+    const o = this.automix.opts;
+    Object.assign(this.settings, { beats: o.beats, bassSwap: o.bassSwap, wash: o.wash });
+    try { localStorage.setItem('djm_settings', JSON.stringify(this.settings)); } catch (e) {}
+  },
+
+  /* ----- 畫面更新迴圈 ----- */
+  _loop() {
+    const a = App;
+    if (a.engine.ready && !document.hidden) {
+      if (a.tab === 'mixer' && a.decksUI.A) { a.decksUI.A.frame(); a.decksUI.B.frame(); a.xfUI.frame(); }
+      a._chip();
+    }
+    requestAnimationFrame(a._loop);
+  },
+  _chip() {
+    const chip = $('#chip'), am = this.automix; let txt, cls = '';
+    if (this.engine.ctx.state !== 'running') { txt = '音訊已暫停 · 點一下繼續'; cls = 'bad'; }
+    else if (am.running) { txt = 'Automix · ' + am.statusText(); cls = 'live'; }
+    else txt = 'Automix 關閉';
+    if (chip.textContent !== txt) chip.textContent = txt;
+    chip.className = 'chip ' + cls;
+  },
+};
+
+window.__app = App;
+window.addEventListener('DOMContentLoaded', () => App.init());
+
+</script>
+</body>
+</html>
